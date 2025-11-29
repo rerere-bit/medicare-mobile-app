@@ -31,10 +31,18 @@ dependencies:
   flutter:
     sdk: flutter
 
+# State management
+
+ # UI & Utilities
+  intl: ^0.18.1           # Untuk format tanggal/waktu
+  fl_chart: ^0.65.0       # Untuk grafik riwayat
+  google_fonts: ^6.1.0    # Agar font terbaca jelas (opsional)
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   firebase_core: ^4.2.1
+  firebase_auth: ^6.1.2
+  cloud_firestore: ^6.1.0
 
 dev_dependencies:
   flutter_test:
