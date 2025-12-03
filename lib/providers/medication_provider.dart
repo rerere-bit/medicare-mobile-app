@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/medication_model.dart';
-import '../models/history_model.dart';
 
 class MedicationProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Collection Reference
-  CollectionReference get _medCollection =>
-      _firestore.collection('medications');
+  CollectionReference get _medCollection => _firestore.collection('medications');
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -41,11 +39,12 @@ class MedicationProvider extends ChangeNotifier {
       );
 
       await _medCollection.add(newMed.toMap());
+      
     } catch (e) {
-      rethrow;
+      rethrow; 
     } finally {
       _isLoading = false;
-      notifyListeners();
+      notifyListeners(); 
     }
   }
 
@@ -60,13 +59,10 @@ class MedicationProvider extends ChangeNotifier {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return MedicationModel.fromMap(
-              doc.data() as Map<String, dynamic>,
-              doc.id,
-            );
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        return MedicationModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }).toList();
+    });
   }
 
   // ... di dalam class MedicationProvider ...
@@ -106,52 +102,5 @@ class MedicationProvider extends ChangeNotifier {
     } catch (e) {
       rethrow;
     }
-  }
-
-  // 5. Collection Reference untuk History
-  CollectionReference get _historyCollection =>
-      _firestore.collection('history');
-
-  // 6. Fungsi Catat Obat Diminum (Log History)
-  Future<void> logMedicationIntake({
-    required String medicationId,
-    required String medicationName,
-    required String dosage,
-  }) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      await _historyCollection.add({
-        'userId': user.uid,
-        'medicationId': medicationId,
-        'medicationName': medicationName,
-        'dosage': dosage,
-        'takenAt': DateTime.now().toIso8601String(), // Waktu sekarang
-      });
-
-      notifyListeners();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // 7. Stream Get History (Read Log)
-  Stream<List<HistoryModel>> getHistory() {
-    final user = _auth.currentUser;
-    if (user == null) return const Stream.empty();
-
-    return _historyCollection
-        .where('userId', isEqualTo: user.uid)
-        .orderBy('takenAt', descending: true) // Urutkan dari yang terbaru
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return HistoryModel.fromMap(
-              doc.data() as Map<String, dynamic>,
-              doc.id,
-            );
-          }).toList();
-        });
   }
 }
