@@ -6,8 +6,7 @@ import '../../providers/medication_provider.dart';
 import '../../models/medication_model.dart'; 
 
 class AddMedicationScreen extends StatefulWidget {
-  final MedicationModel? medication; // Data opsional (jika Edit, ini ada isinya)
-
+  final MedicationModel? medication; 
   const AddMedicationScreen({super.key, this.medication});
 
   @override
