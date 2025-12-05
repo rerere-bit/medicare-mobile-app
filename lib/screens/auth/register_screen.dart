@@ -45,6 +45,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await AuthService().signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        name: _nameController.text.trim(), // Kirim Nama
+        role: _selectedRole,               // Kirim Role (Pasien/Keluarga)
       );
       
       // Note: Di tahap selanjutnya, kita akan simpan "Nama" dan "Role" ke Firestore Database
