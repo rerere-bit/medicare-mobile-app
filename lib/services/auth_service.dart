@@ -59,4 +59,22 @@ class AuthService {
 
     return UserModel.fromMap(doc.data() as Map<String, dynamic>, user.uid);
   }
+
+  // Update Nama User
+  Future<void> updateProfile({required String name}) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // 1. Update di Auth (agar langsung berubah di object user)
+      await user.updateDisplayName(name);
+
+      // 2. Update di Firestore
+      await _firestore.collection('users').doc(user.uid).update({
+        'displayName': name,
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
