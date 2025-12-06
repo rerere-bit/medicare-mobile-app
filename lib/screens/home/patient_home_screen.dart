@@ -282,40 +282,26 @@ class PatientHomeScreen extends StatelessWidget {
                         title: "Obat Saya",
                         icon: Icons.medical_services_outlined,
                         color: Colors.blueAccent,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const MedicationListScreen(),
-                            ),
-                          );
-                        },
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/medication_list'),
                       ),
                       HomeMenuCard(
                         title: "Jadwal",
                         icon: Icons.calendar_today_outlined,
                         color: Colors.lightBlue,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ScheduleScreen(),
-                            ),
-                          );
-                        },
+                        onTap: () => Navigator.pushNamed(context, '/schedule'),
                       ),
                       HomeMenuCard(
                         title: "Riwayat",
                         icon: Icons.history,
                         color: AppTheme.secondaryColor,
-                        onTap: () {},
+                        onTap: () => Navigator.pushNamed(context, '/history'),
                       ),
                       HomeMenuCard(
                         title: "Keluarga",
                         icon: Icons.family_restroom,
                         color: Colors.orangeAccent,
-                        onTap: () {},
+                        onTap: () => Navigator.pushNamed(context, '/family'),
                       ),
                     ],
                   ),

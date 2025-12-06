@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/date_symbol_data_local.dart'; // 1. Pastikan import ini ada
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'firebase_options.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
+import 'screens/history/history_screen.dart';
+import 'screens/home/family_home_screen.dart';
+import 'screens/home/home_screen.dart';
+import 'screens/medication/medication_list_screen.dart';
+import 'screens/schedule/schedule_screen.dart';
 import 'providers/medication_provider.dart';
-import 'providers/family_provider.dart'; // Import Family Provider
+import 'providers/family_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // 2. Wajib ada agar format tanggal (Senin, Selasa, dll) tidak error
   await initializeDateFormatting('id_ID', null);
-
   runApp(const MyApp());
 }
 
@@ -26,10 +28,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // Provider Obat
         ChangeNotifierProvider(create: (_) => MedicationProvider()),
-        
-        // 3. Provider Keluarga (TAMBAHKAN INI)
         ChangeNotifierProvider(create: (_) => FamilyProvider()),
       ],
       child: MaterialApp(
@@ -39,7 +38,16 @@ class MyApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
           useMaterial3: true,
         ),
-        home: const LoginScreen(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const LoginScreen(),
+          '/register': (context) => const RegisterScreen(),
+          '/home': (context) => const HomeScreen(),
+          '/schedule': (context) => const ScheduleScreen(),
+          '/history': (context) => const HistoryScreen(),
+          '/family': (context) => const FamilyHomeScreen(),
+          '/medication_list': (context) => const MedicationListScreen(),
+        },
       ),
     );
   }
