@@ -14,12 +14,17 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // PERBAIKAN 1: Ubah ke Java 8 (Standar library desugaring Android)
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+        
+        // PERBAIKAN 2: Aktifkan flag desugaring (Sintaks Kotlin)
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        // PERBAIKAN 3: Sesuaikan JVM target dengan Java 8
+        jvmTarget = "1.8"
     }
 
     defaultConfig {
@@ -31,6 +36,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Opsional: Bagus untuk stabilitas jika method count banyak
+        multiDexEnabled = true 
     }
 
     buildTypes {
@@ -44,4 +52,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// PERBAIKAN 4: Tambahkan blok dependencies di bagian paling bawah
+dependencies {
+    // Library Desugaring yang wajib ada
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
