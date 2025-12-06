@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 import '../../core/theme_app.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../providers/medication_provider.dart';
-import '../../models/medication_model.dart'; 
+import '../../models/medication_model.dart';
 
 class AddMedicationScreen extends StatefulWidget {
-  final MedicationModel? medication; 
+  final MedicationModel? medication;
+
   const AddMedicationScreen({super.key, this.medication});
 
   @override
@@ -16,21 +17,41 @@ class AddMedicationScreen extends StatefulWidget {
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _nameController = TextEditingController();
   final _dosageController = TextEditingController();
-  final _frequencyController = TextEditingController();
   final _durationController = TextEditingController();
   final _notesController = TextEditingController();
 
-  bool get isEditMode => widget.medication != null; 
+  // --- OPSI DROPDOWN ---
+  final List<String> _frequencyOptions = [
+    '1x Sehari (Pagi)',
+    '2x Sehari (Pagi, Malam)',
+    '3x Sehari (Pagi, Siang, Malam)',
+    '4x Sehari (Setiap 6 jam)',
+  ];
+
+  // --- PERBAIKAN DI SINI: Default value harus sama persis dengan item pertama ---
+  late String _selectedFrequency; 
+
+  bool get isEditMode => widget.medication != null;
 
   @override
   void initState() {
     super.initState();
-    // Jika Mode Edit, isi form dengan data lama
+    
+    // Set default value ke opsi pertama agar aman
+    _selectedFrequency = _frequencyOptions[0];
+
     if (isEditMode) {
       final med = widget.medication!;
       _nameController.text = med.name;
       _dosageController.text = med.dosage;
-      _frequencyController.text = med.frequency;
+      
+      // --- PERBAIKAN SAFETY CHECK ---
+      // Cek apakah frekuensi dari database ada di list opsi kita?
+      // Jika ada, pakai itu. Jika tidak (misal data lama), tetap pakai default agar tidak crash.
+      if (_frequencyOptions.contains(med.frequency)) {
+        _selectedFrequency = med.frequency;
+      }
+      
       _durationController.text = med.duration;
       _notesController.text = med.notes;
     }
@@ -40,7 +61,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   void dispose() {
     _nameController.dispose();
     _dosageController.dispose();
-    _frequencyController.dispose();
     _durationController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -58,21 +78,19 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       final provider = Provider.of<MedicationProvider>(context, listen: false);
 
       if (isEditMode) {
-        // --- LOGIKA UPDATE ---
         await provider.updateMedication(
-          id: widget.medication!.id, 
+          id: widget.medication!.id,
           name: _nameController.text,
           dosage: _dosageController.text,
-          frequency: _frequencyController.text,
+          frequency: _selectedFrequency, 
           duration: _durationController.text,
           notes: _notesController.text,
         );
       } else {
-        // --- LOGIKA TAMBAH BARU ---
         await provider.addMedication(
           name: _nameController.text,
           dosage: _dosageController.text,
-          frequency: _frequencyController.text,
+          frequency: _selectedFrequency, 
           duration: _durationController.text,
           notes: _notesController.text,
         );
@@ -98,7 +116,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        // Judul berubah dinamis
         title: Text(isEditMode ? "Edit Obat" : "Tambah Obat Baru", style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
@@ -113,7 +130,36 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             const SizedBox(height: 16),
             CustomTextField(label: "Dosis", hint: "500mg", controller: _dosageController),
             const SizedBox(height: 16),
-            CustomTextField(label: "Frekuensi", hint: "3x sehari", controller: _frequencyController),
+            
+            // --- DROPDOWN FREKUENSI ---
+            const Text("Frekuensi", style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedFrequency,
+                  isExpanded: true,
+                  items: _frequencyOptions.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                  onChanged: (newValue) {
+                    setState(() {
+                      _selectedFrequency = newValue!;
+                    });
+                  },
+                ),
+              ),
+            ),
+            // -------------------------------
+            
             const SizedBox(height: 16),
             CustomTextField(label: "Durasi", hint: "7 hari", controller: _durationController),
             const SizedBox(height: 16),

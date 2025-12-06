@@ -4,6 +4,9 @@ import '../../widgets/home_menu_card.dart';
 
 import '../medication/medication_list_screen.dart';
 import '../schedule/schedule_screen.dart';
+import '../history/history_screen.dart';
+// Import Profile Screen agar bisa dinavigasikan
+import '../profile/profile_screen.dart';
 
 class PatientHomeScreen extends StatelessWidget {
   const PatientHomeScreen({super.key});
@@ -25,7 +28,6 @@ class PatientHomeScreen extends StatelessWidget {
               ),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  // Biru yang lebih dalam dan premium
                   colors: [Color(0xFF2563EB), Color(0xFF60A5FA)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -39,7 +41,7 @@ class PatientHomeScreen extends StatelessWidget {
                     color: Colors.blueAccent,
                     blurRadius: 20,
                     offset: Offset(0, 10),
-                    spreadRadius: -10, // Efek bayangan halus
+                    spreadRadius: -10,
                   ),
                 ],
               ),
@@ -52,7 +54,7 @@ class PatientHomeScreen extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Badge Status (Mirip Family Screen)
+                          // Badge Status
                           Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
@@ -86,7 +88,7 @@ class PatientHomeScreen extends StatelessWidget {
                             ),
                           ),
                           const Text(
-                            "Halo, Bunda Sari!",
+                            "Halo, Sehat Selalu!", // Bisa diganti dinamis nanti
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -95,7 +97,7 @@ class PatientHomeScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            "Kamis, 27 November 2025",
+                            "Tetap pantau obat Anda",
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
@@ -106,7 +108,14 @@ class PatientHomeScreen extends StatelessWidget {
 
                       // Foto Profil (Navigasi ke Profile)
                       GestureDetector(
-                        onTap: () {},
+                        // --- MODIFIKASI: Tambahkan navigasi ke ProfileScreen ---
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const ProfileScreen()),
+                          );
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(3),
                           decoration: BoxDecoration(
@@ -119,13 +128,11 @@ class PatientHomeScreen extends StatelessWidget {
                           child: const CircleAvatar(
                             radius: 24,
                             backgroundColor: Colors.white,
-                            backgroundImage: NetworkImage(
-                              'https://i.pravatar.cc/300',
-                            ), // Dummy Foto
+                            // Ganti dengan inisial atau icon jika belum ada foto
                             child: Icon(
                               Icons.person,
                               color: AppTheme.primaryColor,
-                            ), // Fallback jika gagal load
+                            ),
                           ),
                         ),
                       ),
@@ -152,7 +159,7 @@ class PatientHomeScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF), // Biru sangat muda
+                            color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: const Icon(
@@ -175,39 +182,13 @@ class PatientHomeScreen extends StatelessWidget {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                "Amlodipine - 5mg",
+                                "Cek Jadwal", // Placeholder text
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
-                              Text(
-                                "Sesudah makan",
-                                style: TextStyle(
-                                  color: AppTheme.primaryColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
                             ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            "20:00",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
                           ),
                         ),
                       ],
@@ -217,59 +198,17 @@ class PatientHomeScreen extends StatelessWidget {
               ),
             ),
 
-            // 2. Ringkasan Jadwal & Menu (Sisa Body tetap sama)
+            // 2. Grid Menu Utama
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Status Hari Ini",
+                    "Menu Utama",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 12),
-                  // Progress Bar yang lebih cantik
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "1 dari 3 Obat Diminum",
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              "33%",
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: 0.33,
-                            backgroundColor: Colors.grey[100],
-                            color: AppTheme.secondaryColor,
-                            minHeight: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Grid Menu Utama
+                  const SizedBox(height: 16),
                   GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -282,26 +221,51 @@ class PatientHomeScreen extends StatelessWidget {
                         title: "Obat Saya",
                         icon: Icons.medical_services_outlined,
                         color: Colors.blueAccent,
-                        onTap: () =>
-                            Navigator.pushNamed(context, '/medication_list'),
+                        // Navigasi Manual (tanpa named route agar lebih aman)
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    const MedicationListScreen()),
+                          );
+                        },
                       ),
                       HomeMenuCard(
                         title: "Jadwal",
                         icon: Icons.calendar_today_outlined,
                         color: Colors.lightBlue,
-                        onTap: () => Navigator.pushNamed(context, '/schedule'),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const ScheduleScreen()),
+                          );
+                        },
                       ),
                       HomeMenuCard(
                         title: "Riwayat",
                         icon: Icons.history,
                         color: AppTheme.secondaryColor,
-                        onTap: () => Navigator.pushNamed(context, '/history'),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const HistoryScreen()),
+                          );
+                        },
                       ),
                       HomeMenuCard(
-                        title: "Keluarga",
-                        icon: Icons.family_restroom,
+                        title: "Profil Saya", // Ganti Keluarga jadi Profil
+                        icon: Icons.person,
                         color: Colors.orangeAccent,
-                        onTap: () => Navigator.pushNamed(context, '/family'),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const ProfileScreen()),
+                          );
+                        },
                       ),
                     ],
                   ),

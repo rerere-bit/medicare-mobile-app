@@ -13,11 +13,13 @@ import 'screens/medication/medication_list_screen.dart';
 import 'screens/schedule/schedule_screen.dart';
 import 'providers/medication_provider.dart';
 import 'providers/family_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('id_ID', null);
+  await NotificationService().init();
   runApp(const MyApp());
 }
 

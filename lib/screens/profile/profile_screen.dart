@@ -1,287 +1,271 @@
 import 'package:flutter/material.dart';
 import '../../core/theme_app.dart';
+import '../../services/auth_service.dart';
+import '../../models/user_model.dart';
 import '../auth/login_screen.dart';
 
-
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  UserModel? _userModel;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  // Ambil data user dari Firestore via AuthService
+  Future<void> _loadUserData() async {
+    final data = await AuthService().getUserData();
+    if (mounted) {
+      setState(() {
+        _userModel = data;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Fungsi Edit Nama
+  void _showEditNameDialog() {
+    final nameController = TextEditingController(text: _userModel?.displayName);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Ubah Nama"),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: "Nama Lengkap"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (nameController.text.trim().isEmpty) return;
+
+              // Proses Update
+              setState(() => _isLoading = true);
+              try {
+                await AuthService().updateProfile(name: nameController.text.trim());
+                await _loadUserData(); // Refresh data setelah update
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil diperbarui!")));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e")));
+                }
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            child: const Text("Simpan"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Fungsi Logout
+  void _handleLogout() async {
+    // Tampilkan konfirmasi
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Keluar Aplikasi?"),
+        content: const Text("Anda harus login kembali untuk mengakses data."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx); // Tutup dialog
+              await AuthService().signOut();
+              
+              if (mounted) {
+                // Reset ke halaman Login & hapus semua route belakang
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text("Keluar", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // Fallback jika data gagal load
+    if (_userModel == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Profil")),
+        body: const Center(child: Text("Gagal memuat data profil")),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
+      appBar: AppBar(
+        title: const Text("Profil Saya"),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+      ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            // 1. HEADER CUSTOM (Lebih Pendek & Berpola)
-            Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                // Background Gradient
-                Container(
-                  height: 160, // KITA KURANGI TINGGINYA (Tadi 220)
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppTheme.primaryColor, Color(0xFF60A5FA)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
-                  ),
-                  child: Stack(
+            // 1. FOTO & NAMA
+            Center(
+              child: Column(
+                children: [
+                  Stack(
                     children: [
-                      // Dekorasi Lingkaran 1 (Biar tidak polos)
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                        child: Text(
+                          _userModel!.displayName.isNotEmpty ? _userModel!.displayName[0].toUpperCase() : "?",
+                          style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                        ),
+                      ),
                       Positioned(
-                        top: -50,
-                        right: -50,
-                        child: Container(
-                          width: 150,
-                          height: 150,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      // Dekorasi Lingkaran 2
-                      Positioned(
-                        bottom: 20,
-                        left: 20,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      
-                      // Judul & Tombol Back
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                              const Text(
-                                "Profil Saya",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              // Spacer kosong biar teks benar-benar di tengah (karena ada icon back di kiri)
-                              const SizedBox(width: 48), 
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Foto Profil Melayang (Circle Avatar)
-                Positioned(
-                  bottom: -50, 
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                         BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 5))
-                      ]
-                    ),
-                    child: Stack(
-                      children: [
-                        const CircleAvatar(
-                          radius: 55, // Ukuran sedikit disesuaikan
-                          backgroundImage: NetworkImage('https://i.pravatar.cc/300'),
-                          backgroundColor: Colors.grey,
-                        ),
-                        // Tombol Edit Kecil
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _showEditNameDialog,
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: const BoxDecoration(
                               color: AppTheme.secondaryColor,
                               shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
-                              ]
                             ),
-                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            // Spacer disesuaikan agar konten tidak tertabrak foto
-            const SizedBox(height: 60),
-
-            // Nama & Email
-            const Text(
-              "Bunda Sari",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              "sari@example.com",
-              style: TextStyle(color: Colors.grey),
-            ),
-            
-            const SizedBox(height: 24),
-
-            // 2. KONTEN MENU (Card Groups) - SAMA SEPERTI SEBELUMNYA
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  // CARD 1: Info Pribadi
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildProfileItem(Icons.phone, "Nomor Telepon", "081234567890"),
-                        const Divider(height: 1, indent: 60, color: Color(0xFFF3F4F6)),
-                        _buildProfileItem(Icons.cake, "Tanggal Lahir", "15 Mei 1960"),
-                        const Divider(height: 1, indent: 60, color: Color(0xFFF3F4F6)),
-                        _buildProfileItem(Icons.location_on, "Alamat", "Jl. Mawar No. 12, Jakarta"),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 20),
-
-                  // CARD 2: Pengaturan
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-                                child: const Icon(Icons.text_fields, color: Colors.blue),
-                              ),
-                              const SizedBox(width: 16),
-                              const Expanded(
-                                child: Text("Ukuran Teks", style: TextStyle(fontWeight: FontWeight.bold)),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Text("Normal", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                              ),
-                            ],
+                            child: const Icon(Icons.edit, color: Colors.white, size: 16),
                           ),
                         ),
-                        const Divider(height: 1, indent: 60, color: Color(0xFFF3F4F6)),
-                        _buildSwitchItem(Icons.notifications_active, "Notifikasi Obat", true),
-                        const Divider(height: 1, indent: 60, color: Color(0xFFF3F4F6)),
-                        _buildSwitchItem(Icons.dark_mode, "Mode Gelap", false),
-                      ],
-                    ),
+                      )
+                    ],
                   ),
-
-                  const SizedBox(height: 30),
-
-                  // Tombol Logout
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                          (route) => false, // false artinya: hapus semua halaman sebelumnya
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFEE2E2),
-                        foregroundColor: AppTheme.errorColor,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  const SizedBox(height: 16),
+                  Text(
+                    _userModel!.displayName,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _userModel!.role == 'Keluarga' ? Colors.orange[100] : Colors.blue[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      "Role: ${_userModel!.role}",
+                      style: TextStyle(
+                        color: _userModel!.role == 'Keluarga' ? Colors.orange[800] : Colors.blue[800],
+                        fontWeight: FontWeight.bold,
                       ),
-                      icon: const Icon(Icons.logout),
-                      label: const Text("Keluar dari Akun"),
                     ),
                   ),
-                  
-                  const SizedBox(height: 40),
                 ],
               ),
             ),
+            
+            const SizedBox(height: 32),
+
+            // 2. DATA AKUN
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _ProfileInfoRow(icon: Icons.email, label: "Email", value: _userModel!.email),
+                  const Divider(height: 32),
+                  _ProfileInfoRow(icon: Icons.badge, label: "User ID", value: _userModel!.uid.substring(0, 8).toUpperCase()),
+                  const Divider(height: 32),
+                  _ProfileInfoRow(icon: Icons.calendar_today, label: "Bergabung", value: "Member Medicare"),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // 3. TOMBOL KELUAR & VERSI
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _handleLogout,
+                icon: const Icon(Icons.logout),
+                label: const Text("Keluar Aplikasi"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[50],
+                  foregroundColor: Colors.red,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text("Versi Aplikasi 1.0.0", style: TextStyle(color: Colors.grey)),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildProfileItem(IconData icon, String title, String subtitle) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: AppTheme.primaryColor),
-      ),
-      title: Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-      trailing: const Icon(Icons.edit, size: 16, color: Colors.grey),
-    );
-  }
+// Widget Kecil Helper
+class _ProfileInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
 
-  Widget _buildSwitchItem(IconData icon, String title, bool value) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: value ? Colors.green[50] : Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: value ? AppTheme.secondaryColor : Colors.grey),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      trailing: Switch(
-        value: value, 
-        activeColor: AppTheme.secondaryColor,
-        onChanged: (val) {},
-      ),
+  const _ProfileInfoRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.grey[600], size: 20),
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+      ],
     );
   }
 }
