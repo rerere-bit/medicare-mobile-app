@@ -1,18 +1,62 @@
 import 'package:flutter/material.dart';
-import '../../core/theme_app.dart';
-import '../../widgets/home_menu_card.dart';
+import 'package:medicare_mobile/models/user_model.dart';
+import 'package:medicare_mobile/services/auth_service.dart';
+import 'package:medicare_mobile/widgets/next_medication_countdown.dart';
+import 'package:medicare_mobile/core/theme_app.dart';
+import 'package:medicare_mobile/widgets/home_menu_card.dart';
+import 'package:medicare_mobile/screens/medication/medication_list_screen.dart';
+import 'package:medicare_mobile/screens/schedule/schedule_screen.dart';
+import 'package:medicare_mobile/screens/history/history_screen.dart';
+import 'package:medicare_mobile/screens/profile/profile_screen.dart';
+// import '../../widgets/home_countdown_section.dart';
 
-import '../medication/medication_list_screen.dart';
-import '../schedule/schedule_screen.dart';
-import '../history/history_screen.dart';
-// Import Profile Screen agar bisa dinavigasikan
-import '../profile/profile_screen.dart';
-
-class PatientHomeScreen extends StatelessWidget {
+class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
 
   @override
+  State<PatientHomeScreen> createState() => _PatientHomeScreenState();
+}
+
+class _PatientHomeScreenState extends State<PatientHomeScreen> {
+  final AuthService _authService = AuthService();
+  UserModel? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = await _authService.getUserData();
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       body: SingleChildScrollView(
@@ -87,9 +131,9 @@ class PatientHomeScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const Text(
-                            "Halo, Sehat Selalu!", // Bisa diganti dinamis nanti
-                            style: TextStyle(
+                          Text(
+                            "Halo, ${_user?.displayName ?? 'Pengguna'}!", // Diganti dinamis
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -181,13 +225,7 @@ class PatientHomeScreen extends StatelessWidget {
                                 ),
                               ),
                               SizedBox(height: 4),
-                              Text(
-                                "Cek Jadwal", // Placeholder text
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
+                              NextMedicationCountdown(), // <-- WIDGET BARU DI SINI
                             ],
                           ),
                         ),

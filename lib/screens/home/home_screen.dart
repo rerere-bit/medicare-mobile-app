@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../models/user_model.dart';
-import '../../services/auth_service.dart';
-import 'patient_home_screen.dart'; 
-import 'family_home_screen.dart'; 
+import 'package:medicare_mobile/models/user_model.dart';
+import 'package:medicare_mobile/services/auth_service.dart';
+import 'package:medicare_mobile/screens/home/patient_home_screen.dart';
+import 'package:medicare_mobile/screens/home/family_home_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,48 +12,56 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Variabel untuk menampung data user & status loading
-  UserModel? _currentUser;
-  bool _isLoading = true;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
-    _checkUserRole();
+    _checkRoleAndNavigate();
   }
 
-  // Fungsi untuk mengecek Role dari Firestore
-  void _checkUserRole() async {
-    final user = await AuthService().getUserData();
-    
-    if (mounted) {
-      setState(() {
-        _currentUser = user;
-        _isLoading = false;
-      });
+  Future<void> _checkRoleAndNavigate() async {
+    try {
+      final UserModel? user = await _authService.getUserData();
+      if (mounted && user != null) {
+        if (user.role == 'Pasien') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const PatientHomeScreen()),
+          );
+        } else if (user.role == 'Keluarga') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const FamilyHomeScreen()),
+          );
+        } else {
+          // Fallback or error handling if role is not recognized
+          // For now, let's navigate to a generic error screen or login
+          // To prevent loops, let's just show an error in the UI
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Peran pengguna tidak dikenali.')),
+          );
+        }
+      }
+    } catch (e) {
+      // Handle error, e.g., show a snackbar or navigate to login
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data pengguna: $e')),
+        );
+        // Optionally, navigate back to login
+        // Navigator.of(context).pushReplacementNamed('/login');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Tampilkan Loading saat sedang mengambil data
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    // 2. Jika Data Kosong (Error), kembalikan ke UI Pasien sebagai default/fallback
-    if (_currentUser == null) {
-       return const PatientHomeScreen(); 
-    }
-
-    // 3. LOGIKA UTAMA: Pilih Layar berdasarkan Role
-    if (_currentUser!.role == 'Keluarga') {
-      return const FamilyHomeScreen();
-    } else {
-      // Default: Pasien
-      return const PatientHomeScreen();
-    }
+    // Show a loading indicator while checking the user's role
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
   }
 }
