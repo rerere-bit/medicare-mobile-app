@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 48),
 
               CustomTextField(
-                label: 'Email', hint: 'email@contoh.com', icon: Icons.email_outlined, controller: _emailController,
+                label: 'Email', hint: 'nama_email@gmail.com', icon: Icons.email_outlined, controller: _emailController,
               ),
               const SizedBox(height: 20),
               CustomTextField(
