@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/medication_model.dart';
+import '../models/history_model.dart';
 
 class MedicationProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Collection Reference for history
+  CollectionReference get _historyCollection =>
+      _firestore.collection('medication_history');
+
   // Collection Reference
-  CollectionReference get _medCollection => _firestore.collection('medications');
+  CollectionReference get _medCollection =>
+      _firestore.collection('medications');
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -39,12 +45,11 @@ class MedicationProvider extends ChangeNotifier {
       );
 
       await _medCollection.add(newMed.toMap());
-      
     } catch (e) {
-      rethrow; 
+      rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners(); 
+      notifyListeners();
     }
   }
 
@@ -59,10 +64,13 @@ class MedicationProvider extends ChangeNotifier {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return MedicationModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
-    });
+          return snapshot.docs.map((doc) {
+            return MedicationModel.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            );
+          }).toList();
+        });
   }
 
   // ... di dalam class MedicationProvider ...
@@ -102,5 +110,70 @@ class MedicationProvider extends ChangeNotifier {
     } catch (e) {
       rethrow;
     }
+  }
+
+  // 5. Fungsi Log Medication Intake
+  Future<void> logMedicationIntake({
+    required String medicationId,
+    required String medicationName,
+    required String dosage,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception("User tidak login");
+
+      await _historyCollection.add({
+        'userId': user.uid,
+        'medicationId': medicationId,
+        'medicationName': medicationName,
+        'dosage': dosage,
+        // use 'takenAt' to match HistoryModel expectations; store server timestamp
+        'takenAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+
+  // 8. KHUSUS KELUARGA: Ambil Obat milik Pasien Lain
+  Stream<List<MedicationModel>> getMedicationsByUserId(String targetUid) {
+    return _medCollection
+        .where('userId', isEqualTo: targetUid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return MedicationModel.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            );
+          }).toList();
+        });
+  }
+
+  // 9. KHUSUS KELUARGA: Ambil Riwayat milik Pasien Lain
+  Stream<List<HistoryModel>> getHistoryByUserId(String targetUid) {
+    return _historyCollection
+        .where('userId', isEqualTo: targetUid)
+        .orderBy('takenAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return HistoryModel.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            );
+          }).toList();
+        });
+  }
+
+  // Stream Riwayat untuk user yang sedang login
+  Stream<List<HistoryModel>> getHistory() {
+    final user = _auth.currentUser;
+    if (user == null) return const Stream.empty();
+
+    return getHistoryByUserId(user.uid);
   }
 }

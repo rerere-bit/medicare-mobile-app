@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme_app.dart';
-import '../../widgets/medication_card.dart';
-import '../../widgets/summary_chart.dart';
-import '../medication/add_medication_screen.dart';
+import '../../providers/medication_provider.dart';
+import '../../models/medication_model.dart';
+import '../../models/history_model.dart';
 
 class PatientDetailScreen extends StatefulWidget {
+  final String patientId; // KUNCI UTAMA: ID Pasien
   final String name;
-  const PatientDetailScreen({super.key, required this.name});
+
+  const PatientDetailScreen({
+    super.key,
+    required this.patientId, // Wajib ada untuk request ke Firebase
+    required this.name,
+  });
 
   @override
   State<PatientDetailScreen> createState() => _PatientDetailScreenState();
@@ -27,12 +35,12 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
       backgroundColor: const Color(0xFFF3F4F6),
       body: Column(
         children: [
-          // 1. HEADER CUSTOM (Gradient & Profil Besar)
+          // 1. HEADER CUSTOM (Tetap menggunakan desain Anda yang bagus)
           Container(
             padding: const EdgeInsets.only(top: 50, bottom: 20, left: 20, right: 20),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF059669), Color(0xFF34D399)], // Hijau Keluarga
+                colors: [Color(0xFF059669), Color(0xFF34D399)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -43,7 +51,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
             ),
             child: Column(
               children: [
-                // Tombol Back & Judul
                 Row(
                   children: [
                     IconButton(
@@ -57,8 +64,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
                   ],
                 ),
                 const SizedBox(height: 10),
-                
-                // Foto Profil & Nama
                 Row(
                   children: [
                     Container(
@@ -93,7 +98,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Text(
-                            "Status: Perlu Perhatian",
+                            "Status: Dalam Pantauan",
                             style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -111,7 +116,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(30),
-
               boxShadow: [
                 BoxShadow(
                   color: Colors.grey.withOpacity(0.1),
@@ -129,137 +133,27 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
               labelStyle: const TextStyle(fontWeight: FontWeight.bold),
               padding: const EdgeInsets.all(6),
               indicator: BoxDecoration(
-                color: const Color(0xFFECFDF5), // Hijau muda sekali
+                color: const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
               ),
               tabs: const [
-                Tab(text: "Statistik"),
-                Tab(text: "Daftar Obat"),
+                Tab(text: "Daftar Obat"), // Kita dahulukan Obat
+                Tab(text: "Riwayat"),     // Kita ganti Statistik jadi Riwayat
               ],
             ),
           ),
 
-          // 3. Isi Konten (TabBarView)
+          // 3. Isi Konten (Logika Realtime Provider)
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                // --- TAB 1: STATISTIK LENGKAP ---
-                SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Grafik Kepatuhan Mingguan", 
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 8),
-                            
-                            // Legenda / Keterangan Warna
-                            Row(
-                              children: [
-                                _buildLegendItem(AppTheme.secondaryColor, "Diminum"),
-                                const SizedBox(width: 16),
-                                _buildLegendItem(Colors.grey[200]!, "Target Harian"),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
+                // TAB 1: DAFTAR OBAT (Realtime)
+                _MedicationListTab(patientId: widget.patientId),
 
-                            // Grafik
-                            const SizedBox(height: 200, child: SummaryChart()), 
-                            
-                            const SizedBox(height: 24),
-                            const Divider(height: 32, color: Color(0xFFF3F4F6)),
-                            const SizedBox(height: 16),
-                            
-                            // Ringkasan Angka
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem("Total Jadwal", "28", Colors.black),
-                                _buildStatItem("Diminum", "24", AppTheme.secondaryColor),
-                                _buildStatItem("Terlewat", "4", AppTheme.errorColor),
-                              ],
-                            )
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Tips Kesehatan
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.tips_and_updates, color: Colors.blue),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                "Tips: ${widget.name} sering melewatkan obat di sore hari. Coba telepon beliau sekitar jam 17:00.",
-                                style: const TextStyle(color: Colors.blue, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-
-                // --- TAB 2: KELOLA OBAT ---
-                Stack(
-                  children: [
-                    ListView(
-                      padding: const EdgeInsets.all(20),
-                      children: [
-                        MedicationCard(
-                          name: "Amlodipine",
-                          dosage: "5mg",
-                          frequency: "1x Sehari",
-                          duration: "Rutin",
-                          onEdit: () {},
-                          onDelete: () => _showDeleteConfirm(context),
-                        ),
-                        MedicationCard(
-                          name: "Metformin",
-                          dosage: "500mg",
-                          frequency: "2x Sehari",
-                          duration: "Rutin",
-                          onEdit: () {},
-                          onDelete: () => _showDeleteConfirm(context),
-                        ),
-                        const SizedBox(height: 80),
-                      ],
-                    ),
-                    Positioned(
-                      bottom: 24,
-                      right: 24,
-                      child: FloatingActionButton.extended(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const AddMedicationScreen()),
-                          );
-                        },
-                        backgroundColor: const Color(0xFF059669),
-                        icon: const Icon(Icons.add),
-                        label: const Text("Tambah Obat"),
-                      ),
-                    ),
-                  ],
-                ),
+                // TAB 2: RIWAYAT (Realtime)
+                _HistoryListTab(patientId: widget.patientId),
               ],
             ),
           ),
@@ -267,44 +161,168 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> with SingleTi
       ),
     );
   }
+}
 
-  // Widget Kecil untuk Legenda Warna
-  Widget _buildLegendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      ],
+// --- WIDGET PENDUKUNG (Extracted Logic) ---
+
+class _MedicationListTab extends StatelessWidget {
+  final String patientId;
+  const _MedicationListTab({required this.patientId});
+
+  @override
+  Widget build(BuildContext context) {
+    // Menggunakan Stream Provider untuk ambil data pasien lain
+    return StreamBuilder<List<MedicationModel>>(
+      stream: Provider.of<MedicationProvider>(context, listen: false)
+          .getMedicationsByUserId(patientId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final meds = snapshot.data ?? [];
+
+        if (meds.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.medication_outlined, size: 60, color: Colors.grey[300]),
+                const SizedBox(height: 16),
+                Text("Pasien belum ada obat", style: TextStyle(color: Colors.grey[500])),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: meds.length,
+          itemBuilder: (context, index) {
+            final med = meds[index];
+            return Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16),
+                leading: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.medication, color: AppTheme.primaryColor),
+                ),
+                title: Text(med.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Row(
+                    children: [
+                      _ChipInfo(icon: Icons.access_time, label: med.frequency),
+                      const SizedBox(width: 8),
+                      _ChipInfo(icon: Icons.local_pharmacy, label: med.dosage),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
+}
 
-  // Widget Kecil untuk Statistik Angka
-  Widget _buildStatItem(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
+class _HistoryListTab extends StatelessWidget {
+  final String patientId;
+  const _HistoryListTab({required this.patientId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<HistoryModel>>(
+      stream: Provider.of<MedicationProvider>(context, listen: false)
+          .getHistoryByUserId(patientId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final logs = snapshot.data ?? [];
+
+        if (logs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.history, size: 60, color: Colors.grey[300]),
+                const SizedBox(height: 16),
+                Text("Belum ada riwayat minum", style: TextStyle(color: Colors.grey[500])),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: logs.length,
+          itemBuilder: (context, index) {
+            final log = logs[index];
+            final dateStr = DateFormat('EEEE, d MMM, HH:mm', 'id_ID').format(log.takenAt);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border(left: BorderSide(color: AppTheme.secondaryColor, width: 4)),
+                boxShadow: [
+                  BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(log.medicationName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text(dateStr, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                    ],
+                  ),
+                  const Icon(Icons.check_circle, color: AppTheme.secondaryColor),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
+}
 
-  void _showDeleteConfirm(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Hapus Obat?"),
-        content: const Text("Obat ini akan dihapus dari daftar orang tua Anda."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx), 
-            child: const Text("Hapus", style: TextStyle(color: Colors.red))
-          ),
+// Widget Kecil Helper
+class _ChipInfo extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ChipInfo({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: Colors.grey[600]),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[800])),
         ],
       ),
     );
