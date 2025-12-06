@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/medication_model.dart';
 import '../models/history_model.dart';
-import '../services/notification_service.dart'; // Pastikan file ini ada
+import '../services/notification_service.dart';
 
 class MedicationProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -20,17 +20,16 @@ class MedicationProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // --- LOGIKA MAPPING WAKTU (Sprint 13) ---
-  // Menerjemahkan String dropdown menjadi List Jam Integer
+  // --- LOGIKA MAPPING WAKTU ---
   List<int> _calculateAlarmTimes(String frequency) {
     if (frequency.contains('1x')) return [8];             // Jam 08:00
     if (frequency.contains('2x')) return [8, 20];         // Jam 08:00, 20:00
     if (frequency.contains('3x')) return [7, 13, 19];     // Jam 07:00, 13:00, 19:00
     if (frequency.contains('4x')) return [6, 12, 18, 23]; // Jam 06, 12, 18, 23
-    return [8]; // Default jam 8 pagi
+    return [8]; // Default
   }
 
-  // 1. Fungsi Tambah Obat (Create) + DYNAMIC NOTIFICATION
+  // 1. Fungsi Tambah Obat (Create)
   Future<void> addMedication({
     required String name,
     required String dosage,
@@ -46,7 +45,7 @@ class MedicationProvider extends ChangeNotifier {
       if (user == null) throw Exception("User tidak login");
 
       final newMed = MedicationModel(
-        id: '', // ID akan digenerate Firestore
+        id: '', 
         userId: user.uid,
         name: name,
         dosage: dosage,
@@ -55,19 +54,13 @@ class MedicationProvider extends ChangeNotifier {
         notes: notes,
       );
 
-      // A. Simpan ke Firestore
       DocumentReference docRef = await _medCollection.add(newMed.toMap());
 
-      // B. Hitung Jadwal Waktu berdasarkan Frekuensi
       List<int> alarmHours = _calculateAlarmTimes(frequency);
-      int baseId = docRef.id.hashCode; // ID Dasar untuk notifikasi
+      int baseId = docRef.id.hashCode; 
 
-      // C. Loop untuk pasang alarm sebanyak frekuensi
       for (int i = 0; i < alarmHours.length; i++) {
         int hour = alarmHours[i];
-        
-        // ID Notifikasi: baseId + index (agar unik untuk setiap jam)
-        // Contoh: Obat A jam 07:00 (ID: 1001), Obat A jam 13:00 (ID: 1002)
         int uniqueNotificationId = baseId + i; 
 
         await NotificationService().scheduleDailyNotification(
@@ -126,11 +119,6 @@ class MedicationProvider extends ChangeNotifier {
         'duration': duration,
         'notes': notes,
       });
-
-      // Catatan: Untuk implementasi sempurna, seharusnya kita membatalkan alarm lama
-      // lalu membuat alarm baru jika frekuensi berubah. 
-      // Namun untuk tugas ini, update data saja sudah cukup baik.
-
     } catch (e) {
       rethrow;
     } finally {
@@ -139,20 +127,14 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // 4. Fungsi Hapus Obat + BATALKAN SEMUA NOTIFIKASI
+  // 4. Fungsi Hapus Obat
   Future<void> deleteMedication(String id) async {
     try {
-      // A. Hapus dari Firestore
       await _medCollection.doc(id).delete();
-
-      // B. Hapus Semua Kemungkinan Alarm untuk obat ini
-      // Kita loop cancel 5 kali (asumsi maksimal frekuensi obat)
-      // agar semua jadwal (pagi/siang/malam) terhapus bersih.
       int baseId = id.hashCode;
       for (int i = 0; i < 5; i++) {
         await NotificationService().cancelNotification(baseId + i);
       }
-      
     } catch (e) {
       rethrow;
     }
@@ -181,7 +163,7 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // 8. KHUSUS KELUARGA: Ambil Obat milik Pasien Lain
+  // 6. KHUSUS KELUARGA: Ambil Obat milik Pasien Lain
   Stream<List<MedicationModel>> getMedicationsByUserId(String targetUid) {
     return _medCollection
         .where('userId', isEqualTo: targetUid)
@@ -197,7 +179,7 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // 9. KHUSUS KELUARGA: Ambil Riwayat milik Pasien Lain
+  // 7. KHUSUS KELUARGA: Ambil Riwayat milik Pasien Lain
   Stream<List<HistoryModel>> getHistoryByUserId(String targetUid) {
     return _historyCollection
         .where('userId', isEqualTo: targetUid)
@@ -213,11 +195,45 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // Stream Riwayat untuk user yang sedang login
+  // 8. Stream Riwayat untuk user yang sedang login
   Stream<List<HistoryModel>> getHistory() {
     final user = _auth.currentUser;
     if (user == null) return const Stream.empty();
 
     return getHistoryByUserId(user.uid);
+  }
+
+  // ---------------------------------------------------------
+  // FITUR BARU: CALCULATE NEXT SCHEDULE (FINISHING TOUCH)
+  // ---------------------------------------------------------
+  
+  DateTime? calculateNextSchedule(List<MedicationModel> medications) {
+    if (medications.isEmpty) return null;
+
+    final now = DateTime.now();
+    DateTime? nearestTime;
+
+    for (var med in medications) {
+      // 1. Ambil jam-jam jadwal obat ini berdasarkan frekuensi
+      List<int> scheduleHours = _calculateAlarmTimes(med.frequency);
+
+      for (var hour in scheduleHours) {
+        // 2. Buat objek DateTime untuk jadwal HARI INI
+        DateTime scheduleTime = DateTime(now.year, now.month, now.day, hour, 0, 0);
+
+        // 3. Jika waktu sudah lewat, anggap jadwalnya BESOK
+        // (Gunakan isAfter biar lebih presisi menghindari waktu sekarang pas)
+        if (now.isAfter(scheduleTime)) {
+          scheduleTime = scheduleTime.add(const Duration(days: 1));
+        }
+
+        // 4. Bandingkan: Apakah ini lebih dekat dibanding yang sudah ditemukan?
+        if (nearestTime == null || scheduleTime.isBefore(nearestTime)) {
+          nearestTime = scheduleTime;
+        }
+      }
+    }
+
+    return nearestTime;
   }
 }
