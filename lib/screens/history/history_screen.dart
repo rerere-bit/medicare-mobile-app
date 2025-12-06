@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart'; // Pastikan sudah add intl di pubspec.yaml
-import '../../core/theme_app.dart';
-import '../../providers/medication_provider.dart';
-import '../../models/history_model.dart';
-import '../../widgets/gradient_app_bar.dart';
+import 'package:medicare_mobile/core/theme_app.dart';
+import 'package:medicare_mobile/providers/medication_provider.dart';
+import 'package:medicare_mobile/models/history_model.dart';
+import 'package:medicare_mobile/widgets/gradient_app_bar.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});

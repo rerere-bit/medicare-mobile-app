@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:medicare_mobile/models/user_model.dart';
 import 'package:medicare_mobile/services/auth_service.dart';
-import 'package:medicare_mobile/widgets/next_medication_countdown.dart';
+import 'package:medicare_mobile/widgets/home_countdown_section.dart';
 import 'package:medicare_mobile/core/theme_app.dart';
 import 'package:medicare_mobile/widgets/home_menu_card.dart';
 import 'package:medicare_mobile/screens/medication/medication_list_screen.dart';
@@ -198,22 +198,10 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                         ),
                       ],
                     ),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.medication,
-                            color: AppTheme.primaryColor,
-                            size: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        const Expanded(
+                        SizedBox(width: 16),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -225,7 +213,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                                 ),
                               ),
                               SizedBox(height: 4),
-                              NextMedicationCountdown(), // <-- WIDGET BARU DI SINI
+                              HomeCountdownSection(), // <-- WIDGET BARU DI SINI
                             ],
                           ),
                         ),

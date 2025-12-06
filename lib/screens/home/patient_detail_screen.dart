@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme_app.dart';
-import '../../providers/medication_provider.dart';
-import '../../models/medication_model.dart';
-import '../../models/history_model.dart';
+import 'package:medicare_mobile/core/theme_app.dart';
+import 'package:medicare_mobile/providers/medication_provider.dart';
+import 'package:medicare_mobile/models/medication_model.dart';
+import 'package:medicare_mobile/models/history_model.dart';
 
 class PatientDetailScreen extends StatefulWidget {
   final String patientId; // KUNCI UTAMA: ID Pasien
