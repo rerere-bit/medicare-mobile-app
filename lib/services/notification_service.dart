@@ -1,24 +1,24 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
+// KUNCI NAVIGASI GLOBAL (Agar bisa navigasi tanpa context widget)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class NotificationService {
-  // Singleton Pattern
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // Inisialisasi
   Future<void> init() async {
-    tz.initializeTimeZones(); // Wajib untuk jadwal waktu
+    tz.initializeTimeZones();
 
-    // Setting Android
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // Setting iOS (Standar)
     const DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -31,20 +31,27 @@ class NotificationService {
       iOS: initializationSettingsDarwin,
     );
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      // --- FUNGSI KLIK NOTIFIKASI ---
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        if (response.payload != null) {
+          // Navigasi ke Alarm Screen membawa Payload (ID Obat)
+          navigatorKey.currentState?.pushNamed('/alarm', arguments: response.payload);
+        }
+      },
+    );
   }
 
-  // Fungsi Menjadwalkan Notifikasi Harian
   Future<void> scheduleDailyNotification({
     required int id,
     required String title,
     required String body,
     required int hour,
     required int minute,
+    String? payload, // Tambahan Payload
   }) async {
     
-    // --- PERBAIKAN: Minta Izin Exact Alarm (Android 12+) ---
-    // Ini mencegah error "Exact alarms are not permitted"
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -52,25 +59,23 @@ class NotificationService {
     if (androidImplementation != null) {
       await androidImplementation.requestExactAlarmsPermission();
     }
-    // --------------------------------------------------------
 
-    // Konfigurasi Detail Notifikasi Android
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'medication_channel', // Id Channel
-      'Pengingat Obat',     // Nama Channel
-      channelDescription: 'Notifikasi untuk jadwal minum obat',
+      'medication_channel',
+      'Pengingat Obat',
+      channelDescription: 'Notifikasi Alarm Obat',
       importance: Importance.max,
       priority: Priority.high,
-      fullScreenIntent: true, // Agar muncul pop-up walau layar mati
+      fullScreenIntent: true, // PENTING: Agar muncul sebagai alarm full screen
+      playSound: true,
+      enableVibration: true,
     );
 
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
-    // Hitung waktu jadwal hari ini/besok
     final now = tz.TZDateTime.now(tz.local);
     var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
     
-    // Jika jam sudah lewat hari ini, jadwalkan untuk besok
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
@@ -82,17 +87,16 @@ class NotificationService {
         body,
         scheduledDate,
         platformDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Mode ini butuh izin di atas
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Ulangi setiap jam yang sama setiap hari
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: payload, // Kirim ID Obat disini
       );
     } catch (e) {
-      // Tangkap error jika user menolak izin, agar aplikasi tidak crash
-      print("Gagal menjadwalkan notifikasi: $e");
+      print("Error scheduling notification: $e");
     }
   }
 
-  // Batalkan Notifikasi (Misal obat dihapus)
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
   }

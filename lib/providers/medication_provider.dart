@@ -3,34 +3,55 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/medication_model.dart';
 import '../models/history_model.dart';
-import '../services/notification_service.dart'; // Pastikan file ini ada
+import '../services/notification_service.dart';
+
+// Class bantuan untuk menampung hasil kalkulasi jadwal
+class NextScheduleData {
+  final DateTime time;
+  final String medName;
+  final String dosage;
+
+  NextScheduleData({
+    required this.time,
+    required this.medName,
+    required this.dosage,
+  });
+}
 
 class MedicationProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Collection Reference for history
   CollectionReference get _historyCollection =>
       _firestore.collection('medication_history');
 
-  // Collection Reference
   CollectionReference get _medCollection =>
       _firestore.collection('medications');
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // --- LOGIKA MAPPING WAKTU (Sprint 13) ---
-  // Menerjemahkan String dropdown menjadi List Jam Integer
+  // --- LOGIKA MAPPING WAKTU & ID NOTIFIKASI ---
+  
+  // Mengubah frekuensi teks menjadi jam spesifik (Integer)
   List<int> _calculateAlarmTimes(String frequency) {
-    if (frequency.contains('1x')) return [8];             // Jam 08:00
-    if (frequency.contains('2x')) return [8, 20];         // Jam 08:00, 20:00
-    if (frequency.contains('3x')) return [7, 13, 19];     // Jam 07:00, 13:00, 19:00
-    if (frequency.contains('4x')) return [6, 12, 18, 23]; // Jam 06, 12, 18, 23
-    return [8]; // Default jam 8 pagi
+    if (frequency.contains('1x')) return [8]; // 08:00
+    if (frequency.contains('2x')) return [8, 20]; // 08:00, 20:00
+    if (frequency.contains('3x')) return [7, 13, 19]; // 07:00, 13:00, 19:00
+    if (frequency.contains('4x')) return [6, 12, 18, 23]; // Per 6 jam
+    return [8]; // Default
   }
 
-  // 1. Fungsi Tambah Obat (Create) + DYNAMIC NOTIFICATION
+  // Menghasilkan ID notifikasi unik berdasarkan ID Obat dan index jam
+  // Ini penting agar kita bisa membatalkan notifikasi spesifik nanti
+  int _generateNotificationId(String medId, int index) {
+    // Mengambil hashcode dari string ID + index agar unik
+    return (medId.hashCode + index).abs(); 
+  }
+
+  // --- CRUD OBAT ---
+
+  // 1. Tambah Obat & Jadwalkan Alarm
   Future<void> addMedication({
     required String name,
     required String dosage,
@@ -45,8 +66,12 @@ class MedicationProvider extends ChangeNotifier {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User tidak login");
 
+      // A. Simpan ke Firestore
+      // Kita buat docRef dulu agar dapat ID-nya sebelum save
+      DocumentReference docRef = _medCollection.doc(); 
+      
       final newMed = MedicationModel(
-        id: '', // ID akan digenerate Firestore
+        id: docRef.id, // Gunakan ID dari docRef
         userId: user.uid,
         name: name,
         dosage: dosage,
@@ -55,29 +80,14 @@ class MedicationProvider extends ChangeNotifier {
         notes: notes,
       );
 
-      // A. Simpan ke Firestore
-      DocumentReference docRef = await _medCollection.add(newMed.toMap());
+      // Gabungkan data model dengan server timestamp
+      final data = newMed.toMap();
+      data['createdAt'] = FieldValue.serverTimestamp();
 
-      // B. Hitung Jadwal Waktu berdasarkan Frekuensi
-      List<int> alarmHours = _calculateAlarmTimes(frequency);
-      int baseId = docRef.id.hashCode; // ID Dasar untuk notifikasi
+      await docRef.set(data);
 
-      // C. Loop untuk pasang alarm sebanyak frekuensi
-      for (int i = 0; i < alarmHours.length; i++) {
-        int hour = alarmHours[i];
-        
-        // ID Notifikasi: baseId + index (agar unik untuk setiap jam)
-        // Contoh: Obat A jam 07:00 (ID: 1001), Obat A jam 13:00 (ID: 1002)
-        int uniqueNotificationId = baseId + i; 
-
-        await NotificationService().scheduleDailyNotification(
-          id: uniqueNotificationId,
-          title: "Waktunya Minum Obat",
-          body: "Saatnya minum $name ($dosage) - Jadwal Pukul $hour:00",
-          hour: hour,
-          minute: 0,
-        );
-      }
+      // B. Jadwalkan Notifikasi
+      await _scheduleNotificationsForMedication(newMed);
 
     } catch (e) {
       rethrow;
@@ -87,7 +97,113 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // 2. Stream Get Obat (Read)
+  // 2. Update Obat (Hapus Alarm Lama -> Update Data -> Buat Alarm Baru)
+  Future<void> updateMedication({
+    required String id,
+    required String name,
+    required String dosage,
+    required String frequency,
+    required String duration,
+    required String notes,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception("User tidak login");
+
+      // A. Ambil data lama untuk tahu frekuensi sebelumnya (untuk cancel notif)
+      DocumentSnapshot oldDoc = await _medCollection.doc(id).get();
+      if (!oldDoc.exists) throw Exception("Data obat tidak ditemukan");
+      
+      MedicationModel oldMed = MedicationModel.fromMap(
+          oldDoc.data() as Map<String, dynamic>, id);
+
+      // B. Batalkan Notifikasi Lama
+      await _cancelNotificationsForMedication(oldMed);
+
+      // C. Update Firestore
+      final updatedMed = MedicationModel(
+        id: id,
+        userId: user.uid,
+        name: name,
+        dosage: dosage,
+        frequency: frequency,
+        duration: duration,
+        notes: notes,
+      );
+
+      await _medCollection.doc(id).update(updatedMed.toMap());
+
+      // D. Jadwalkan Notifikasi Baru
+      await _scheduleNotificationsForMedication(updatedMed);
+
+    } catch (e) {
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // 3. Hapus Obat & Batalkan Alarm
+  Future<void> deleteMedication(String id) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+       // A. Ambil data dulu untuk cancel notifikasi
+      DocumentSnapshot doc = await _medCollection.doc(id).get();
+      if (doc.exists) {
+        MedicationModel med = MedicationModel.fromMap(
+            doc.data() as Map<String, dynamic>, id);
+        
+        // B. Batalkan Notifikasi
+        await _cancelNotificationsForMedication(med);
+      }
+
+      // C. Hapus dari Firestore
+      await _medCollection.doc(id).delete();
+      
+    } catch (e) {
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // --- HELPERS NOTIFIKASI ---
+
+  Future<void> _scheduleNotificationsForMedication(MedicationModel med) async {
+    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    
+    for (int i = 0; i < alarmHours.length; i++) {
+      int hour = alarmHours[i];
+      int notifId = _generateNotificationId(med.id, i);
+
+      await NotificationService().scheduleDailyNotification(
+        id: notifId,
+        title: "Waktunya Minum Obat",
+        body: "${med.name} ${med.dosage} - Jadwal Pukul $hour:00",
+        hour: hour,
+        minute: 0,
+        payload: med.id, // Kita kirim ID obat sebagai payload untuk navigasi nanti
+      );
+    }
+  }
+
+  Future<void> _cancelNotificationsForMedication(MedicationModel med) async {
+    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    
+    for (int i = 0; i < alarmHours.length; i++) {
+      int notifId = _generateNotificationId(med.id, i);
+      await NotificationService().cancelNotification(notifId);
+    }
+  }
+
+  // --- BAGIAN READ DATA (Sama seperti sebelumnya) ---
+
   Stream<List<MedicationModel>> getMedications() {
     final user = _auth.currentUser;
     if (user == null) return const Stream.empty();
@@ -106,82 +222,6 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // 3. Fungsi Update Obat
-  Future<void> updateMedication({
-    required String id,
-    required String name,
-    required String dosage,
-    required String frequency,
-    required String duration,
-    required String notes,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      await _medCollection.doc(id).update({
-        'name': name,
-        'dosage': dosage,
-        'frequency': frequency,
-        'duration': duration,
-        'notes': notes,
-      });
-
-      // Catatan: Untuk implementasi sempurna, seharusnya kita membatalkan alarm lama
-      // lalu membuat alarm baru jika frekuensi berubah. 
-      // Namun untuk tugas ini, update data saja sudah cukup baik.
-
-    } catch (e) {
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // 4. Fungsi Hapus Obat + BATALKAN SEMUA NOTIFIKASI
-  Future<void> deleteMedication(String id) async {
-    try {
-      // A. Hapus dari Firestore
-      await _medCollection.doc(id).delete();
-
-      // B. Hapus Semua Kemungkinan Alarm untuk obat ini
-      // Kita loop cancel 5 kali (asumsi maksimal frekuensi obat)
-      // agar semua jadwal (pagi/siang/malam) terhapus bersih.
-      int baseId = id.hashCode;
-      for (int i = 0; i < 5; i++) {
-        await NotificationService().cancelNotification(baseId + i);
-      }
-      
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // 5. Fungsi Log Medication Intake
-  Future<void> logMedicationIntake({
-    required String medicationId,
-    required String medicationName,
-    required String dosage,
-  }) async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) throw Exception("User tidak login");
-
-      await _historyCollection.add({
-        'userId': user.uid,
-        'medicationId': medicationId,
-        'medicationName': medicationName,
-        'dosage': dosage,
-        'takenAt': DateTime.now().toIso8601String(), 
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // 8. KHUSUS KELUARGA: Ambil Obat milik Pasien Lain
   Stream<List<MedicationModel>> getMedicationsByUserId(String targetUid) {
     return _medCollection
         .where('userId', isEqualTo: targetUid)
@@ -197,7 +237,36 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // 9. KHUSUS KELUARGA: Ambil Riwayat milik Pasien Lain
+  // --- LOGIKA RIWAYAT ---
+
+  Future<void> logMedicationIntake({
+    required String medicationId,
+    required String medicationName,
+    required String dosage,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception("User tidak login");
+
+      await _historyCollection.add({
+        'userId': user.uid,
+        'medicationId': medicationId,
+        'medicationName': medicationName,
+        'dosage': dosage,
+        'takenAt': DateTime.now().toIso8601String(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Stream<List<HistoryModel>> getHistory() {
+    final user = _auth.currentUser;
+    if (user == null) return const Stream.empty();
+    return getHistoryByUserId(user.uid);
+  }
+
   Stream<List<HistoryModel>> getHistoryByUserId(String targetUid) {
     return _historyCollection
         .where('userId', isEqualTo: targetUid)
@@ -213,11 +282,39 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // Stream Riwayat untuk user yang sedang login
-  Stream<List<HistoryModel>> getHistory() {
-    final user = _auth.currentUser;
-    if (user == null) return const Stream.empty();
+  // --- LOGIKA HITUNG MUNDUR (HOME) ---
+  
+  DateTime getNextTimeForMedication(MedicationModel med) {
+    final now = DateTime.now();
+    List<int> scheduleHours = _calculateAlarmTimes(med.frequency);
+    DateTime? nearestTime;
 
-    return getHistoryByUserId(user.uid);
+    for (var hour in scheduleHours) {
+      DateTime scheduleTime = DateTime(now.year, now.month, now.day, hour, 0, 0);
+      if (now.isAfter(scheduleTime)) {
+        scheduleTime = scheduleTime.add(const Duration(days: 1));
+      }
+      if (nearestTime == null || scheduleTime.isBefore(nearestTime)) {
+        nearestTime = scheduleTime;
+      }
+    }
+    return nearestTime!;
+  }
+
+  NextScheduleData? calculateNextSchedule(List<MedicationModel> medications) {
+    if (medications.isEmpty) return null;
+    NextScheduleData? nearestData;
+
+    for (var med in medications) {
+      DateTime nextTime = getNextTimeForMedication(med);
+      if (nearestData == null || nextTime.isBefore(nearestData.time)) {
+        nearestData = NextScheduleData(
+          time: nextTime,
+          medName: med.name,
+          dosage: med.dosage,
+        );
+      }
+    }
+    return nearestData;
   }
 }

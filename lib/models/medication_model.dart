@@ -1,11 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class MedicationModel {
   final String id;
-  final String userId; 
+  final String userId;
   final String name;
   final String dosage;
   final String frequency;
   final String duration;
   final String notes;
+  final DateTime? createdAt; // Tambahkan field ini
 
   MedicationModel({
     required this.id,
@@ -15,6 +18,7 @@ class MedicationModel {
     required this.frequency,
     required this.duration,
     required this.notes,
+    this.createdAt, // Tambahkan ke constructor
   });
 
   // Mengubah data dari Firebase (Map) ke Object Dart
@@ -27,6 +31,8 @@ class MedicationModel {
       frequency: map['frequency'] ?? '',
       duration: map['duration'] ?? '',
       notes: map['notes'] ?? '',
+      // Baca timestamp dari firestore
+      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -39,7 +45,7 @@ class MedicationModel {
       'frequency': frequency,
       'duration': duration,
       'notes': notes,
-      'createdAt': DateTime.now(), 
+      // Hapus 'createdAt' dari sini untuk mencegah penimpaan
     };
   }
 }

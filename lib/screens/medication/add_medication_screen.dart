@@ -4,6 +4,7 @@ import '../../core/theme_app.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../providers/medication_provider.dart';
 import '../../models/medication_model.dart';
+import '../../services/drug_service.dart';
 
 class AddMedicationScreen extends StatefulWidget {
   final MedicationModel? medication;
@@ -15,12 +16,16 @@ class AddMedicationScreen extends StatefulWidget {
 }
 
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
-  final _nameController = TextEditingController();
+  // Controller untuk Autocomplete sedikit berbeda
+  // Kita simpan string nama obat di variabel terpisah jika pakai Autocomplete
+  String _selectedDrugName = "";
+  
   final _dosageController = TextEditingController();
   final _durationController = TextEditingController();
   final _notesController = TextEditingController();
 
-  // --- OPSI DROPDOWN ---
+  final DrugService _drugService = DrugService();
+
   final List<String> _frequencyOptions = [
     '1x Sehari (Pagi)',
     '2x Sehari (Pagi, Malam)',
@@ -28,7 +33,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     '4x Sehari (Setiap 6 jam)',
   ];
 
-  // --- PERBAIKAN DI SINI: Default value harus sama persis dengan item pertama ---
   late String _selectedFrequency; 
 
   bool get isEditMode => widget.medication != null;
@@ -36,18 +40,13 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   @override
   void initState() {
     super.initState();
-    
-    // Set default value ke opsi pertama agar aman
     _selectedFrequency = _frequencyOptions[0];
 
     if (isEditMode) {
       final med = widget.medication!;
-      _nameController.text = med.name;
+      _selectedDrugName = med.name; // Pre-fill nama
       _dosageController.text = med.dosage;
       
-      // --- PERBAIKAN SAFETY CHECK ---
-      // Cek apakah frekuensi dari database ada di list opsi kita?
-      // Jika ada, pakai itu. Jika tidak (misal data lama), tetap pakai default agar tidak crash.
       if (_frequencyOptions.contains(med.frequency)) {
         _selectedFrequency = med.frequency;
       }
@@ -59,7 +58,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
     _dosageController.dispose();
     _durationController.dispose();
     _notesController.dispose();
@@ -67,7 +65,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   }
 
   void _saveMedication() async {
-    if (_nameController.text.isEmpty || _dosageController.text.isEmpty) {
+    if (_selectedDrugName.isEmpty || _dosageController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Nama obat dan dosis wajib diisi!")),
       );
@@ -80,7 +78,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       if (isEditMode) {
         await provider.updateMedication(
           id: widget.medication!.id,
-          name: _nameController.text,
+          name: _selectedDrugName,
           dosage: _dosageController.text,
           frequency: _selectedFrequency, 
           duration: _durationController.text,
@@ -88,7 +86,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         );
       } else {
         await provider.addMedication(
-          name: _nameController.text,
+          name: _selectedDrugName,
           dosage: _dosageController.text,
           frequency: _selectedFrequency, 
           duration: _durationController.text,
@@ -126,18 +124,66 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomTextField(label: "Nama Obat", hint: "Contoh: Paracetamol", controller: _nameController),
+            // --- AUTOCOMPLETE NAMA OBAT (FITUR API) ---
+            const Text("Nama Obat", style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Autocomplete<DrugModel>(
+              initialValue: TextEditingValue(text: _selectedDrugName),
+              displayStringForOption: (DrugModel option) => option.name,
+              optionsBuilder: (TextEditingValue textEditingValue) async {
+                if (textEditingValue.text == '') {
+                  return const Iterable<DrugModel>.empty();
+                }
+                return await _drugService.searchDrugs(textEditingValue.text);
+              },
+              onSelected: (DrugModel selection) {
+                setState(() {
+                  _selectedDrugName = selection.name;
+                  // Auto-fill deskripsi jika notes masih kosong
+                  if (_notesController.text.isEmpty) {
+                    _notesController.text = selection.description;
+                  }
+                });
+              },
+              // Kustomisasi Tampilan Input agar mirip CustomTextField
+              fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                // Sinkronisasi controller internal Autocomplete dengan variabel kita
+                if (textController.text != _selectedDrugName) {
+                    // Hanya set jika berbeda untuk menghindari infinite loop
+                     textController.text = _selectedDrugName;
+                }
+                // Listener manual untuk menyimpan perubahan jika user mengetik manual (bukan pilih opsi)
+                textController.addListener(() {
+                  _selectedDrugName = textController.text;
+                });
+
+                return TextField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    hintText: "Cari nama obat...",
+                    fillColor: const Color(0xFFF9FAFB),
+                    filled: true,
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 16),
+            
             CustomTextField(label: "Dosis", hint: "500mg", controller: _dosageController),
             const SizedBox(height: 16),
             
-            // --- DROPDOWN FREKUENSI ---
             const Text("Frekuensi", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
+                color: const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: DropdownButtonHideUnderline(
@@ -158,19 +204,18 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                 ),
               ),
             ),
-            // -------------------------------
             
             const SizedBox(height: 16),
             CustomTextField(label: "Durasi", hint: "7 hari", controller: _durationController),
             const SizedBox(height: 16),
             
-            const Text("Catatan Dokter", style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text("Catatan / Deskripsi", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             TextField(
               controller: _notesController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: "Catatan khusus...",
+                hintText: "Otomatis terisi jika obat ditemukan...",
                 fillColor: const Color(0xFFF9FAFB),
                 filled: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -185,10 +230,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.secondaryColor,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: isLoading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white))
-                    : Text(isEditMode ? "Simpan Perubahan" : "Simpan Obat"),
+                    : Text(isEditMode ? "Simpan Perubahan" : "Simpan Obat", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ],

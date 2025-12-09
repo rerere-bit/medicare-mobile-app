@@ -1,24 +1,67 @@
+import 'dart:async'; // Tambahan untuk Timer refresh UI
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme_app.dart';
 import '../../widgets/home_menu_card.dart';
+import '../../models/medication_model.dart'; // Import Model
+import '../../providers/medication_provider.dart'; // Import Provider
 
 import '../medication/medication_list_screen.dart';
 import '../schedule/schedule_screen.dart';
 import '../history/history_screen.dart';
-// Import Profile Screen agar bisa dinavigasikan
 import '../profile/profile_screen.dart';
 
-class PatientHomeScreen extends StatelessWidget {
+class PatientHomeScreen extends StatefulWidget {
   const PatientHomeScreen({super.key});
 
   @override
+  State<PatientHomeScreen> createState() => _PatientHomeScreenState();
+}
+
+class _PatientHomeScreenState extends State<PatientHomeScreen> {
+  // Timer untuk merefresh tampilan setiap menit agar hitung mundur update
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh UI setiap 1 menit agar teks "X menit lagi" berubah
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // Helper untuk format teks countdown
+  String _getCountdownText(DateTime scheduleTime) {
+    final now = DateTime.now();
+    final difference = scheduleTime.difference(now);
+
+    if (difference.isNegative) {
+      return "Sekarang!";
+    } else if (difference.inHours > 0) {
+      return "${difference.inHours} jam ${difference.inMinutes % 60} menit lagi";
+    } else {
+      return "${difference.inMinutes} menit lagi";
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Akses Provider
+    final medProvider = Provider.of<MedicationProvider>(context, listen: false);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. HEADER BARU (Level-up Design)
+            // 1. HEADER DENGAN LOGIC COUNTDOWN
             Container(
               padding: const EdgeInsets.only(
                 top: 60,
@@ -54,7 +97,6 @@ class PatientHomeScreen extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Badge Status
                           Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
@@ -70,11 +112,7 @@ class PatientHomeScreen extends StatelessWidget {
                             ),
                             child: const Row(
                               children: [
-                                Icon(
-                                  Icons.verified_user,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
+                                Icon(Icons.verified_user, color: Colors.white, size: 14),
                                 SizedBox(width: 8),
                                 Text(
                                   "Mode Pasien",
@@ -88,7 +126,7 @@ class PatientHomeScreen extends StatelessWidget {
                             ),
                           ),
                           const Text(
-                            "Halo, Sehat Selalu!", // Bisa diganti dinamis nanti
+                            "Halo, Sehat Selalu!",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -98,22 +136,15 @@ class PatientHomeScreen extends StatelessWidget {
                           const SizedBox(height: 4),
                           const Text(
                             "Tetap pantau obat Anda",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
+                            style: TextStyle(color: Colors.white70, fontSize: 14),
                           ),
                         ],
                       ),
-
-                      // Foto Profil (Navigasi ke Profile)
                       GestureDetector(
-                        // --- MODIFIKASI: Tambahkan navigasi ke ProfileScreen ---
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                                builder: (context) => const ProfileScreen()),
+                            MaterialPageRoute(builder: (context) => const ProfileScreen()),
                           );
                         },
                         child: Container(
@@ -128,11 +159,7 @@ class PatientHomeScreen extends StatelessWidget {
                           child: const CircleAvatar(
                             radius: 24,
                             backgroundColor: Colors.white,
-                            // Ganti dengan inisial atau icon jika belum ada foto
-                            child: Icon(
-                              Icons.person,
-                              color: AppTheme.primaryColor,
-                            ),
+                            child: Icon(Icons.person, color: AppTheme.primaryColor),
                           ),
                         ),
                       ),
@@ -140,65 +167,93 @@ class PatientHomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Card Pengingat Berikutnya (Floating Effect)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
+                  // --- LOGIC COUNTDOWN DI SINI ---
+                  StreamBuilder<List<MedicationModel>>(
+                    stream: medProvider.getMedications(),
+                    builder: (context, snapshot) {
+                      // 1. Hitung Jadwal Berikutnya
+                      final meds = snapshot.data ?? [];
+                      final nextSchedule = medProvider.calculateNextSchedule(meds);
+
+                      String titleText = "Tidak ada jadwal";
+                      String subtitleText = "Anda bebas obat hari ini";
+                      Color iconColor = Colors.grey;
+                      Color boxColor = Colors.grey.shade100;
+
+                      if (nextSchedule != null) {
+                        titleText = "Minum ${nextSchedule.medName}";
+                        subtitleText = _getCountdownText(nextSchedule.time);
+                        iconColor = AppTheme.primaryColor;
+                        boxColor = const Color(0xFFEFF6FF);
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.medication,
-                            color: AppTheme.primaryColor,
-                            size: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Pengingat Berikutnya",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: boxColor,
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                "Cek Jadwal", // Placeholder text
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                              child: Icon(
+                                Icons.access_alarm, // Ganti Icon jadi Alarm
+                                color: iconColor,
+                                size: 32,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    subtitleText, // Teks Hitung Mundur (BESAR)
+                                    style: TextStyle(
+                                      color: nextSchedule != null ? Colors.redAccent : Colors.grey,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    titleText, // Nama Obat
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: Colors.black87
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Indikator panah kecil jika ada jadwal
+                            if (nextSchedule != null)
+                              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey)
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ],
               ),
             ),
 
-            // 2. Grid Menu Utama
+            // 2. GRID MENU (Tetap sama)
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -221,13 +276,11 @@ class PatientHomeScreen extends StatelessWidget {
                         title: "Obat Saya",
                         icon: Icons.medical_services_outlined,
                         color: Colors.blueAccent,
-                        // Navigasi Manual (tanpa named route agar lebih aman)
                         onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) =>
-                                    const MedicationListScreen()),
+                                builder: (context) => const MedicationListScreen()),
                           );
                         },
                       ),
@@ -256,7 +309,7 @@ class PatientHomeScreen extends StatelessWidget {
                         },
                       ),
                       HomeMenuCard(
-                        title: "Profil Saya", // Ganti Keluarga jadi Profil
+                        title: "Profil Saya",
                         icon: Icons.person,
                         color: Colors.orangeAccent,
                         onTap: () {
