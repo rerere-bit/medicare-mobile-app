@@ -5,6 +5,7 @@ import '../models/medication_model.dart';
 import '../models/history_model.dart';
 import '../services/notification_service.dart';
 
+
 class NextScheduleData {
   final DateTime time;
   final String medName;
@@ -30,15 +31,6 @@ class MedicationProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // --- LOGIKA MAPPING WAKTU ---
-  List<int> _calculateAlarmTimes(String frequency) {
-    if (frequency.contains('1x')) return [8];
-    if (frequency.contains('2x')) return [8, 20];
-    if (frequency.contains('3x')) return [7, 13, 19];
-    if (frequency.contains('4x')) return [6, 12, 18, 23];
-    return [8];
-  }
-
   int _generateNotificationId(String medId, int index) {
     return (medId.hashCode + index).abs(); 
   }
@@ -55,6 +47,7 @@ class MedicationProvider extends ChangeNotifier {
     required String type,
     required int stock,
     required String instruction,
+    required List<String> timeSlots,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -77,6 +70,7 @@ class MedicationProvider extends ChangeNotifier {
         type: type,
         stock: stock,
         instruction: instruction,
+        timeSlots: timeSlots,
       );
 
       await docRef.set(newMed.toMap());
@@ -103,6 +97,7 @@ class MedicationProvider extends ChangeNotifier {
     required String type,
     required int stock,
     required String instruction,
+    required List<String> timeSlots,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -131,6 +126,7 @@ class MedicationProvider extends ChangeNotifier {
         type: type,
         stock: stock,
         instruction: instruction,
+        timeSlots: timeSlots,
       );
 
       await _medCollection.doc(id).update(updatedMed.toMap());
@@ -166,9 +162,11 @@ class MedicationProvider extends ChangeNotifier {
 
   // --- HELPERS NOTIFIKASI ---
   Future<void> _scheduleNotificationsForMedication(MedicationModel med) async {
-    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
-    for (int i = 0; i < alarmHours.length; i++) {
-      int hour = alarmHours[i];
+    // List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    for (int i = 0; i < med.timeSlots.length; i++) {
+      final timeParts = med.timeSlots[i].split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
       int notifId = _generateNotificationId(med.id, i);
 
       await NotificationService().scheduleDailyNotification(
@@ -176,15 +174,15 @@ class MedicationProvider extends ChangeNotifier {
         title: "Waktunya Minum Obat",
         body: "${med.name} ${med.dosage}\n${med.instruction}", // Tambah instruksi di notif
         hour: hour,
-        minute: 0,
+        minute: minute,
         payload: med.id,
       );
     }
   }
 
   Future<void> _cancelNotificationsForMedication(MedicationModel med) async {
-    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
-    for (int i = 0; i < alarmHours.length; i++) {
+    // List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    for (int i = 0; i < med.timeSlots.length; i++) {
       int notifId = _generateNotificationId(med.id, i);
       await NotificationService().cancelNotification(notifId);
     }
@@ -274,11 +272,15 @@ class MedicationProvider extends ChangeNotifier {
   // --- HOME HELPER ---
   DateTime getNextTimeForMedication(MedicationModel med) {
     final now = DateTime.now();
-    List<int> scheduleHours = _calculateAlarmTimes(med.frequency);
+    // List<int> scheduleHours = _calculateAlarmTimes(med.frequency);
     DateTime? nearestTime;
 
-    for (var hour in scheduleHours) {
-      DateTime scheduleTime = DateTime(now.year, now.month, now.day, hour, 0, 0);
+    for (var timeString in med.timeSlots) {
+       final timeParts = timeString.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+
+      DateTime scheduleTime = DateTime(now.year, now.month, now.day, hour, minute, 0);
       if (now.isAfter(scheduleTime)) {
         scheduleTime = scheduleTime.add(const Duration(days: 1));
       }
@@ -286,7 +288,7 @@ class MedicationProvider extends ChangeNotifier {
         nearestTime = scheduleTime;
       }
     }
-    return nearestTime!;
+    return nearestTime ?? DateTime.now().add(const Duration(days: 1));
   }
 
   NextScheduleData? calculateNextSchedule(List<MedicationModel> medications) {

@@ -114,6 +114,8 @@ class MedicationListScreen extends StatelessWidget {
                         dosage: med.dosage,
                         frequency: med.frequency,
                         duration: med.duration,
+                        color: med.color,
+                        type: med.type,
                         onEdit: () {
                           // Buka halaman Add tapi bawa data (Mode Edit)
                           Navigator.push(

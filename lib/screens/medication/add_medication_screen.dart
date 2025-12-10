@@ -21,31 +21,27 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final _dosageController = TextEditingController();
   final _durationController = TextEditingController();
   final _notesController = TextEditingController();
-  final _stockController = TextEditingController(); // NEW: Controller Stock
+  final _stockController = TextEditingController();
 
   final DrugService _drugService = DrugService();
 
-  // --- DATA PILIHAN BARU ---
-  
-  // 1. Frekuensi
+  // --- OPSI ---
   final List<String> _frequencyOptions = [
-    '1x Sehari (Pagi)',
-    '2x Sehari (Pagi, Malam)',
-    '3x Sehari (Pagi, Siang, Malam)',
-    '4x Sehari (Setiap 6 jam)',
+    '1x Sehari',
+    '2x Sehari',
+    '3x Sehari',
+    '4x Sehari',
   ];
-  late String _selectedFrequency; 
+  String _selectedFrequency = '1x Sehari';
 
-  // 2. Instruksi Minum
-  final List<String> _instructionOptions = [
-    'Sesudah makan',
-    'Sebelum makan',
-    'Saat makan',
-    'Waktu bebas',
-  ];
+  // --- STATE JADWAL DINAMIS ---
+  // Menyimpan list jam yang akan diset. Default 1 slot jam 08:00
+  List<TimeOfDay> _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
+
+  // --- OPSI LAINNYA ---
+  final List<String> _instructionOptions = ['Sesudah makan', 'Sebelum makan', 'Saat makan', 'Waktu bebas'];
   String _selectedInstruction = 'Sesudah makan';
 
-  // 3. Jenis Obat (Icon)
   final Map<String, IconData> _typeOptions = {
     'pill': Icons.medication,
     'syrup': Icons.local_drink,
@@ -54,16 +50,8 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   };
   String _selectedType = 'pill';
 
-  // 4. Warna Identitas
   final List<int> _colorOptions = [
-    0xFF2196F3, // Biru (Default)
-    0xFF4CAF50, // Hijau
-    0xFFF44336, // Merah
-    0xFFFFC107, // Kuning
-    0xFF9C27B0, // Ungu
-    0xFFFF9800, // Orange
-    0xFF795548, // Coklat
-    0xFF607D8B, // Abu-abu
+    0xFF2196F3, 0xFF4CAF50, 0xFFF44336, 0xFFFFC107, 0xFF9C27B0, 0xFFFF9800, 0xFF795548, 0xFF607D8B
   ];
   int _selectedColor = 0xFF2196F3;
 
@@ -72,21 +60,33 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedFrequency = _frequencyOptions[0];
-
     if (isEditMode) {
       final med = widget.medication!;
       _selectedDrugName = med.name;
       _dosageController.text = med.dosage;
       
-      if (_frequencyOptions.contains(med.frequency)) {
-        _selectedFrequency = med.frequency;
+      // LOGIKA INIT JADWAL
+      if (med.timeSlots.isNotEmpty) {
+        // Jika ada data jadwal dinamis, load itu
+        _scheduleTimes = med.timeSlots.map((s) {
+          final parts = s.split(':');
+          return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        }).toList();
+
+        // Sesuaikan tampilan dropdown frekuensi agar sesuai jumlah jadwal
+        if (_scheduleTimes.length == 1) _selectedFrequency = '1x Sehari';
+        else if (_scheduleTimes.length == 2) _selectedFrequency = '2x Sehari';
+        else if (_scheduleTimes.length == 3) _selectedFrequency = '3x Sehari';
+        else if (_scheduleTimes.length == 4) _selectedFrequency = '4x Sehari';
+      } else {
+        // Fallback ke data lama (hanya string frekuensi)
+        if (_frequencyOptions.contains(med.frequency)) {
+          _selectedFrequency = med.frequency;
+        }
       }
       
       _durationController.text = med.duration;
       _notesController.text = med.notes;
-      
-      // Load New Fields
       _stockController.text = med.stock.toString();
       _selectedColor = med.color;
       _selectedType = med.type;
@@ -106,6 +106,51 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     super.dispose();
   }
 
+  // --- LOGIKA UBAH FREKUENSI ---
+  void _onFrequencyChanged(String? newValue) {
+    if (newValue == null) return;
+    setState(() {
+      _selectedFrequency = newValue;
+      // Reset jadwal berdasarkan frekuensi umum
+      // Ini memberi default times yang umum, tapi user bisa ubah nanti
+      if (newValue.contains('1x')) {
+        _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0)];
+      } else if (newValue.contains('2x')) {
+        _scheduleTimes = [const TimeOfDay(hour: 8, minute: 0), const TimeOfDay(hour: 20, minute: 0)];
+      } else if (newValue.contains('3x')) {
+        _scheduleTimes = [const TimeOfDay(hour: 7, minute: 0), const TimeOfDay(hour: 13, minute: 0), const TimeOfDay(hour: 19, minute: 0)];
+      } else if (newValue.contains('4x')) {
+        _scheduleTimes = [const TimeOfDay(hour: 6, minute: 0), const TimeOfDay(hour: 12, minute: 0), const TimeOfDay(hour: 18, minute: 0), const TimeOfDay(hour: 23, minute: 0)];
+      }
+    });
+  }
+
+  // --- LOGIKA PILIH JAM (TIME PICKER) ---
+  Future<void> _pickTime(int index) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _scheduleTimes[index],
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _scheduleTimes[index] = picked;
+      });
+    }
+  }
+
   void _saveMedication() async {
     if (_selectedDrugName.isEmpty || _dosageController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,8 +161,12 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
     try {
       final provider = Provider.of<MedicationProvider>(context, listen: false);
-      // Parse stock (default 0 jika kosong)
       int stockVal = int.tryParse(_stockController.text) ?? 0;
+
+      // Konversi List<TimeOfDay> ke List<String> ("HH:mm") untuk disimpan
+      List<String> timeStrings = _scheduleTimes.map((t) {
+        return "${t.hour}:${t.minute}";
+      }).toList();
 
       if (isEditMode) {
         await provider.updateMedication(
@@ -127,11 +176,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           frequency: _selectedFrequency, 
           duration: _durationController.text,
           notes: _notesController.text,
-          // New Fields
           color: _selectedColor,
           type: _selectedType,
           stock: stockVal,
           instruction: _selectedInstruction,
+          timeSlots: timeStrings, // KIRIM DATA WAKTU
         );
       } else {
         await provider.addMedication(
@@ -140,11 +189,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           frequency: _selectedFrequency, 
           duration: _durationController.text,
           notes: _notesController.text,
-          // New Fields
           color: _selectedColor,
           type: _selectedType,
           stock: stockVal,
           instruction: _selectedInstruction,
+          timeSlots: timeStrings, // KIRIM DATA WAKTU
         );
       }
 
@@ -221,7 +270,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 2. DOSIS & STOK (Row)
+            // 2. DOSIS & STOK
             Row(
               children: [
                 Expanded(child: CustomTextField(label: "Dosis", hint: "500mg", controller: _dosageController)),
@@ -250,9 +299,10 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 3. FREKUENSI & INSTRUKSI
-            const Text("Jadwal & Aturan", style: TextStyle(fontWeight: FontWeight.w600)),
+            // 3. JADWAL DINAMIS (UPDATED UI)
+            const Text("Jadwal & Frekuensi", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
+            // Dropdown Frekuensi
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
@@ -261,11 +311,53 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   value: _selectedFrequency,
                   isExpanded: true,
                   items: _frequencyOptions.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-                  onChanged: (v) => setState(() => _selectedFrequency = v!),
+                  onChanged: _onFrequencyChanged, // Panggil fungsi reset jadwal
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            
+            const SizedBox(height: 16),
+            const Text("Jam Minum Obat (Ketuk untuk ubah)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 8),
+            
+            // Grid Waktu (Dinamis)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: List.generate(_scheduleTimes.length, (index) {
+                final time = _scheduleTimes[index];
+                return GestureDetector(
+                  onTap: () => _pickTime(index),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryColor),
+                      boxShadow: [
+                        BoxShadow(color: AppTheme.primaryColor.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time, size: 18, color: AppTheme.primaryColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primaryColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 20),
+
+            // 4. INSTRUKSI
+            const Text("Aturan Minum", style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
             SizedBox(
               height: 40,
               child: ListView(
@@ -287,7 +379,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 4. VISUALISASI (Bentuk & Warna)
+            // 5. VISUALISASI
             const Text("Visualisasi (Agar mudah dikenali)", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Row(
@@ -356,7 +448,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 5. DURASI & CATATAN
+            // 6. DURASI & CATATAN
             CustomTextField(label: "Durasi Pengobatan", hint: "Contoh: 7 hari / Selamanya", controller: _durationController),
             const SizedBox(height: 16),
             const Text("Catatan / Deskripsi", style: TextStyle(fontWeight: FontWeight.w600)),

@@ -103,6 +103,8 @@ class _ScheduleCardWithTimerState extends State<_ScheduleCardWithTimer> {
     String minutes = _timeLeft.inMinutes.remainder(60).toString().padLeft(2, '0');
     String seconds = _timeLeft.inSeconds.remainder(60).toString().padLeft(2, '0');
 
+    final medColor = Color(widget.med.color);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -121,10 +123,10 @@ class _ScheduleCardWithTimerState extends State<_ScheduleCardWithTimer> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  color: medColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.medication, color: Colors.blueAccent),
+                child: Icon(Icons.medication, color: medColor),
               ),
               const SizedBox(width: 16),
               

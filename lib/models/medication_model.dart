@@ -1,17 +1,20 @@
 class MedicationModel {
   final String id;
-  final String userId; 
+  final String userId;
   final String name;
   final String dosage;
   final String frequency;
   final String duration;
   final String notes;
   
-  // --- FIELD BARU (PERSONALISASI) ---
-  final int color; // Menyimpan value warna (0xFF...)
-  final String type; // 'pill', 'syrup', 'injection', 'powder'
-  final int stock; // Jumlah stok saat ini
-  final String instruction; // 'Sesudah makan', 'Sebelum makan', dll.
+  // Personalisasi (Fitur sebelumnya)
+  final int color;
+  final String type;
+  final int stock;
+  final String instruction;
+
+  // --- FIELD BARU (JADWAL DINAMIS) ---
+  final List<String> timeSlots; // Format: ["HH:mm", "HH:mm"]
 
   MedicationModel({
     required this.id,
@@ -21,11 +24,12 @@ class MedicationModel {
     required this.frequency,
     required this.duration,
     required this.notes,
-    // Default value agar tidak error dengan data lama
-    this.color = 0xFF2196F3, // Default Blue
+    this.color = 0xFF2196F3,
     this.type = 'pill',
     this.stock = 0,
     this.instruction = 'Sesudah makan',
+    // Default kosong agar aman untuk data lama
+    this.timeSlots = const [], 
   });
 
   factory MedicationModel.fromMap(Map<String, dynamic> map, String id) {
@@ -37,11 +41,12 @@ class MedicationModel {
       frequency: map['frequency'] ?? '',
       duration: map['duration'] ?? '',
       notes: map['notes'] ?? '',
-      // Mapping field baru dengan safety check
       color: map['color'] ?? 0xFF2196F3,
       type: map['type'] ?? 'pill',
       stock: map['stock'] ?? 0,
       instruction: map['instruction'] ?? 'Sesudah makan',
+      // Konversi List<dynamic> ke List<String>
+      timeSlots: List<String>.from(map['timeSlots'] ?? []),
     );
   }
 
@@ -57,7 +62,8 @@ class MedicationModel {
       'type': type,
       'stock': stock,
       'instruction': instruction,
-      'createdAt': DateTime.now().toIso8601String(), 
+      'timeSlots': timeSlots, // Simpan ke Firestore
+      'createdAt': DateTime.now().toIso8601String(),
     };
   }
 }

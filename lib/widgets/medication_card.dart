@@ -6,6 +6,8 @@ class MedicationCard extends StatelessWidget {
   final String dosage;
   final String frequency;
   final String duration;
+  final int color; // NEW: Terima Warna
+  final String type; // NEW: Terima Tipe
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -15,9 +17,22 @@ class MedicationCard extends StatelessWidget {
     required this.dosage,
     required this.frequency,
     required this.duration,
+    required this.color, // Wajib
+    required this.type, // Wajib
     this.onEdit,
     this.onDelete,
   });
+
+  // Helper untuk mengubah String tipe menjadi IconData
+  IconData _getIconByType(String type) {
+    switch (type) {
+      case 'syrup': return Icons.local_drink;
+      case 'injection': return Icons.vaccines;
+      case 'powder': return Icons.grain;
+      case 'pill':
+      default: return Icons.medication;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,90 +41,83 @@ class MedicationCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20), // Lebih bulat
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.grey.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // Icon Obat
+              // --- VISUALISASI OBAT (UPDATED) ---
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: Color(color).withOpacity(0.15), // Background transparan warna obat
                   shape: BoxShape.circle,
+                  border: Border.all(color: Color(color).withOpacity(0.3), width: 1),
                 ),
-                child: const Icon(Icons.medication, color: AppTheme.primaryColor),
+                child: Icon(
+                  _getIconByType(type),
+                  color: Color(color), // Icon sesuai warna obat
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
-              // Nama & Dosis
+              
+              // Detail Teks
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                     ),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        dosage,
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        "$dosage • $frequency",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                       ),
                     ),
                   ],
                 ),
               ),
-              // Tombol Aksi (Edit & Delete)
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                onPressed: onEdit,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: onDelete,
+              
+              // Menu Options (Edit/Delete)
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') onEdit?.call();
+                  if (value == 'delete') onDelete?.call();
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Edit')]),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(children: [Icon(Icons.delete, color: Colors.red, size: 18), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.red))]),
+                  ),
+                ],
+                child: const Icon(Icons.more_vert, color: Colors.grey),
               ),
             ],
           ),
-          const Divider(height: 24, color: Color(0xFFF3F4F6)),
-          // Info Tambahan
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildInfoItem("Frekuensi", frequency),
-              _buildInfoItem("Durasi", duration),
-            ],
-          )
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoItem(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
     );
   }
 }
