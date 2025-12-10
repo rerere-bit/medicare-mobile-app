@@ -5,7 +5,6 @@ import '../models/medication_model.dart';
 import '../models/history_model.dart';
 import '../services/notification_service.dart';
 
-// Class bantuan untuk menampung hasil kalkulasi jadwal
 class NextScheduleData {
   final DateTime time;
   final String medName;
@@ -31,60 +30,31 @@ class MedicationProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // --- LOGIKA HELPER NOTIFIKASI & WAKTU ---
-  
-  // Menerjemahkan String frekuensi menjadi List jam (Integer)
+  // --- LOGIKA MAPPING WAKTU ---
   List<int> _calculateAlarmTimes(String frequency) {
-    if (frequency.contains('1x')) return [8]; // 08:00
-    if (frequency.contains('2x')) return [8, 20]; // 08:00, 20:00
-    if (frequency.contains('3x')) return [7, 13, 19]; // 07:00, 13:00, 19:00
-    if (frequency.contains('4x')) return [6, 12, 18, 23]; // Per 6 jam
-    return [8]; // Default
+    if (frequency.contains('1x')) return [8];
+    if (frequency.contains('2x')) return [8, 20];
+    if (frequency.contains('3x')) return [7, 13, 19];
+    if (frequency.contains('4x')) return [6, 12, 18, 23];
+    return [8];
   }
 
-  // Menghasilkan ID notifikasi yang unik dan deterministik
   int _generateNotificationId(String medId, int index) {
     return (medId.hashCode + index).abs(); 
   }
 
-  // Helper untuk menjadwalkan semua notifikasi untuk satu obat
-  Future<void> _scheduleNotificationsForMedication(MedicationModel med) async {
-    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
-    
-    for (int i = 0; i < alarmHours.length; i++) {
-      int hour = alarmHours[i];
-      int notifId = _generateNotificationId(med.id, i);
-
-      await NotificationService().scheduleDailyNotification(
-        id: notifId,
-        title: "Waktunya Minum Obat",
-        body: "${med.name} ${med.dosage} - Jadwal Pukul $hour:00",
-        hour: hour,
-        minute: 0,
-        payload: med.id, // Mengirim ID obat sebagai payload
-      );
-    }
-  }
-
-  // Helper untuk membatalkan semua notifikasi untuk satu obat
-  Future<void> _cancelNotificationsForMedication(MedicationModel med) async {
-    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
-    
-    for (int i = 0; i < alarmHours.length; i++) {
-      int notifId = _generateNotificationId(med.id, i);
-      await NotificationService().cancelNotification(notifId);
-    }
-  }
-
-  // --- FUNGSI CRUD OBAT ---
-
-  // 1. Tambah Obat & Jadwalkan Alarm
+  // 1. TAMBAH OBAT (UPDATED)
   Future<void> addMedication({
     required String name,
     required String dosage,
     required String frequency,
     required String duration,
     required String notes,
+    // Params Baru
+    required int color,
+    required String type,
+    required int stock,
+    required String instruction,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -93,26 +63,23 @@ class MedicationProvider extends ChangeNotifier {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User tidak login");
 
-      // Buat DocumentReference terlebih dahulu untuk mendapatkan ID unik
       DocumentReference docRef = _medCollection.doc(); 
       
       final newMed = MedicationModel(
-        id: docRef.id, // Gunakan ID dari docRef
+        id: docRef.id,
         userId: user.uid,
         name: name,
         dosage: dosage,
         frequency: frequency,
         duration: duration,
         notes: notes,
+        color: color,
+        type: type,
+        stock: stock,
+        instruction: instruction,
       );
 
-      // Siapkan data untuk disimpan, termasuk createdAt
-      final data = newMed.toMap();
-      data['createdAt'] = FieldValue.serverTimestamp();
-
-      await docRef.set(data);
-
-      // Jadwalkan notifikasi menggunakan helper
+      await docRef.set(newMed.toMap());
       await _scheduleNotificationsForMedication(newMed);
 
     } catch (e) {
@@ -123,7 +90,7 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // 2. Update Obat (Batalkan Alarm Lama -> Update Data -> Buat Alarm Baru)
+  // 2. UPDATE OBAT (UPDATED)
   Future<void> updateMedication({
     required String id,
     required String name,
@@ -131,6 +98,11 @@ class MedicationProvider extends ChangeNotifier {
     required String frequency,
     required String duration,
     required String notes,
+    // Params Baru
+    required int color,
+    required String type,
+    required int stock,
+    required String instruction,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -139,17 +111,14 @@ class MedicationProvider extends ChangeNotifier {
       final user = _auth.currentUser;
       if (user == null) throw Exception("User tidak login");
 
-      // Ambil data lama untuk mengetahui frekuensi sebelumnya
+      // Cancel notif lama
       DocumentSnapshot oldDoc = await _medCollection.doc(id).get();
-      if (!oldDoc.exists) throw Exception("Data obat tidak ditemukan");
-      
-      MedicationModel oldMed = MedicationModel.fromMap(
-          oldDoc.data() as Map<String, dynamic>, id);
+      if (oldDoc.exists) {
+         MedicationModel oldMed = MedicationModel.fromMap(
+            oldDoc.data() as Map<String, dynamic>, id);
+         await _cancelNotificationsForMedication(oldMed);
+      }
 
-      // Batalkan notifikasi lama berdasarkan data lama
-      await _cancelNotificationsForMedication(oldMed);
-
-      // Buat model baru dengan data yang diperbarui
       final updatedMed = MedicationModel(
         id: id,
         userId: user.uid,
@@ -158,13 +127,13 @@ class MedicationProvider extends ChangeNotifier {
         frequency: frequency,
         duration: duration,
         notes: notes,
-        createdAt: oldMed.createdAt, // Pertahankan createdAt yang lama
+        color: color,
+        type: type,
+        stock: stock,
+        instruction: instruction,
       );
 
-      // Update data di Firestore
       await _medCollection.doc(id).update(updatedMed.toMap());
-
-      // Jadwalkan notifikasi baru berdasarkan data baru
       await _scheduleNotificationsForMedication(updatedMed);
 
     } catch (e) {
@@ -175,24 +144,18 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // 3. Hapus Obat & Batalkan Semua Notifikasinya
+  // 3. Hapus Obat
   Future<void> deleteMedication(String id) async {
     _isLoading = true;
     notifyListeners();
     try {
-       // Ambil data obat sebelum dihapus untuk membatalkan notifikasi
       DocumentSnapshot doc = await _medCollection.doc(id).get();
       if (doc.exists) {
         MedicationModel med = MedicationModel.fromMap(
             doc.data() as Map<String, dynamic>, id);
-        
-        // Batalkan notifikasi menggunakan helper
         await _cancelNotificationsForMedication(med);
       }
-
-      // Hapus dokumen dari Firestore
       await _medCollection.doc(id).delete();
-      
     } catch (e) {
       rethrow;
     } finally {
@@ -201,8 +164,33 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // --- STREAM & FUNGSI READ DATA ---
+  // --- HELPERS NOTIFIKASI ---
+  Future<void> _scheduleNotificationsForMedication(MedicationModel med) async {
+    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    for (int i = 0; i < alarmHours.length; i++) {
+      int hour = alarmHours[i];
+      int notifId = _generateNotificationId(med.id, i);
 
+      await NotificationService().scheduleDailyNotification(
+        id: notifId,
+        title: "Waktunya Minum Obat",
+        body: "${med.name} ${med.dosage}\n${med.instruction}", // Tambah instruksi di notif
+        hour: hour,
+        minute: 0,
+        payload: med.id,
+      );
+    }
+  }
+
+  Future<void> _cancelNotificationsForMedication(MedicationModel med) async {
+    List<int> alarmHours = _calculateAlarmTimes(med.frequency);
+    for (int i = 0; i < alarmHours.length; i++) {
+      int notifId = _generateNotificationId(med.id, i);
+      await NotificationService().cancelNotification(notifId);
+    }
+  }
+
+  // --- READ DATA ---
   Stream<List<MedicationModel>> getMedications() {
     final user = _auth.currentUser;
     if (user == null) return const Stream.empty();
@@ -235,9 +223,8 @@ class MedicationProvider extends ChangeNotifier {
       }).toList();
     });
   }
-  
-  // --- LOGIKA RIWAYAT ---
 
+  // --- RIWAYAT ---
   Future<void> logMedicationIntake({
     required String medicationId,
     required String medicationName,
@@ -255,6 +242,9 @@ class MedicationProvider extends ChangeNotifier {
         'takenAt': DateTime.now().toIso8601String(),
         'createdAt': FieldValue.serverTimestamp(),
       });
+      
+      // TODO: Bisa ditambahkan logika pengurangan stok di sini
+      
     } catch (e) {
       rethrow;
     }
@@ -281,8 +271,7 @@ class MedicationProvider extends ChangeNotifier {
     });
   }
 
-  // --- LOGIKA HITUNG MUNDUR (Tidak diubah, tetap ada untuk UI) ---
-  
+  // --- HOME HELPER ---
   DateTime getNextTimeForMedication(MedicationModel med) {
     final now = DateTime.now();
     List<int> scheduleHours = _calculateAlarmTimes(med.frequency);

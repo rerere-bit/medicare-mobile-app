@@ -1,14 +1,17 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class MedicationModel {
   final String id;
-  final String userId;
+  final String userId; 
   final String name;
   final String dosage;
   final String frequency;
   final String duration;
   final String notes;
-  final DateTime? createdAt; // Tambahkan field ini
+  
+  // --- FIELD BARU (PERSONALISASI) ---
+  final int color; // Menyimpan value warna (0xFF...)
+  final String type; // 'pill', 'syrup', 'injection', 'powder'
+  final int stock; // Jumlah stok saat ini
+  final String instruction; // 'Sesudah makan', 'Sebelum makan', dll.
 
   MedicationModel({
     required this.id,
@@ -18,10 +21,13 @@ class MedicationModel {
     required this.frequency,
     required this.duration,
     required this.notes,
-    this.createdAt, // Tambahkan ke constructor
+    // Default value agar tidak error dengan data lama
+    this.color = 0xFF2196F3, // Default Blue
+    this.type = 'pill',
+    this.stock = 0,
+    this.instruction = 'Sesudah makan',
   });
 
-  // Mengubah data dari Firebase (Map) ke Object Dart
   factory MedicationModel.fromMap(Map<String, dynamic> map, String id) {
     return MedicationModel(
       id: id,
@@ -31,12 +37,14 @@ class MedicationModel {
       frequency: map['frequency'] ?? '',
       duration: map['duration'] ?? '',
       notes: map['notes'] ?? '',
-      // Baca timestamp dari firestore
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
+      // Mapping field baru dengan safety check
+      color: map['color'] ?? 0xFF2196F3,
+      type: map['type'] ?? 'pill',
+      stock: map['stock'] ?? 0,
+      instruction: map['instruction'] ?? 'Sesudah makan',
     );
   }
 
-  // Mengubah Object Dart ke format Firebase (Map)
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
@@ -45,7 +53,11 @@ class MedicationModel {
       'frequency': frequency,
       'duration': duration,
       'notes': notes,
-      // Hapus 'createdAt' dari sini untuk mencegah penimpaan
+      'color': color,
+      'type': type,
+      'stock': stock,
+      'instruction': instruction,
+      'createdAt': DateTime.now().toIso8601String(), 
     };
   }
 }
