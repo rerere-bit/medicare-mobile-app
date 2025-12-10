@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class MedicationModel {
   final String id;
   final String userId;
@@ -7,14 +9,14 @@ class MedicationModel {
   final String duration;
   final String notes;
   
-  // Personalisasi (Fitur sebelumnya)
   final int color;
   final String type;
   final int stock;
   final String instruction;
-
-  // --- FIELD BARU (JADWAL DINAMIS) ---
-  final List<String> timeSlots; // Format: ["HH:mm", "HH:mm"]
+  final List<String> timeSlots;
+  
+  // FIELD PENTING UNTUK DURASI
+  final DateTime createdAt; 
 
   MedicationModel({
     required this.id,
@@ -28,11 +30,18 @@ class MedicationModel {
     this.type = 'pill',
     this.stock = 0,
     this.instruction = 'Sesudah makan',
-    // Default kosong agar aman untuk data lama
-    this.timeSlots = const [], 
+    this.timeSlots = const [],
+    required this.createdAt, // Wajib diisi sekarang
   });
 
   factory MedicationModel.fromMap(Map<String, dynamic> map, String id) {
+    // Parsing tanggal aman
+    DateTime parseDate(dynamic val) {
+      if (val is String) return DateTime.tryParse(val) ?? DateTime.now();
+      if (val is Timestamp) return val.toDate(); // Jika dari Firestore Timestamp
+      return DateTime.now();
+    }
+
     return MedicationModel(
       id: id,
       userId: map['userId'] ?? '',
@@ -45,8 +54,8 @@ class MedicationModel {
       type: map['type'] ?? 'pill',
       stock: map['stock'] ?? 0,
       instruction: map['instruction'] ?? 'Sesudah makan',
-      // Konversi List<dynamic> ke List<String>
       timeSlots: List<String>.from(map['timeSlots'] ?? []),
+      createdAt: parseDate(map['createdAt']), // Load Tanggal Buat
     );
   }
 
@@ -62,8 +71,8 @@ class MedicationModel {
       'type': type,
       'stock': stock,
       'instruction': instruction,
-      'timeSlots': timeSlots, // Simpan ke Firestore
-      'createdAt': DateTime.now().toIso8601String(),
+      'timeSlots': timeSlots,
+      'createdAt': createdAt.toIso8601String(), // Simpan sebagai String ISO
     };
   }
 }

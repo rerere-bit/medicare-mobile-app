@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:flutter_timezone/flutter_timezone.dart'; // Import baru
+// HAPUS IMPORT INI: import 'package:flutter_timezone/flutter_timezone.dart'; 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -14,9 +14,8 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // --- 1. INISIALISASI ---
   Future<void> init() async {
-    // A. Setup Zona Waktu Lokal (CRITICAL)
+    // A. Setup Zona Waktu Lokal (MANUAL FIX)
     await _configureLocalTimeZone();
 
     // B. Setup Android Settings
@@ -36,7 +35,6 @@ class NotificationService {
       iOS: initializationSettingsDarwin,
     );
 
-    // D. Initialize Plugin
     await flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
@@ -47,36 +45,37 @@ class NotificationService {
       },
     );
 
-    // E. Request Permission (WAJIB)
     await _requestPermissions();
   }
 
-  // Helper: Ambil Zona Waktu HP
+  // --- UPDATE BAGIAN INI DI notification_service.dart ---
   Future<void> _configureLocalTimeZone() async {
     tz.initializeTimeZones();
-    final String timeZoneName = await FlutterTimezone.getLocalTimezone();
-    tz.setLocalLocation(tz.getLocation(timeZoneName));
-    debugPrint("🌍 Timezone set to: $timeZoneName");
+    
+    try {
+      // GANTI DARI 'Asia/Jakarta' KE 'Asia/Makassar'
+      tz.setLocalLocation(tz.getLocation('Asia/Makassar')); 
+      debugPrint("🌍 Timezone set manually to: Asia/Makassar (WITA)");
+    } catch (e) {
+      debugPrint("Error setting timezone: $e");
+      // Fallback
+      tz.setLocalLocation(tz.UTC); 
+    }
   }
 
-  // Helper: Minta Izin Notifikasi & Alarm
   Future<void> _requestPermissions() async {
     if (Platform.isAndroid) {
       final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
           flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
-      // 1. Izin Notifikasi (Android 13+)
       final bool? grantedNotif = await androidImplementation?.requestNotificationsPermission();
-      
-      // 2. Izin Alarm Presisi (Android 12+)
       final bool? grantedAlarm = await androidImplementation?.requestExactAlarmsPermission();
 
       debugPrint("🔑 Izin Notifikasi: $grantedNotif | Izin Alarm: $grantedAlarm");
     }
   }
 
-  // --- 2. FUNGSI SCHEDULE ALARM ---
   Future<void> scheduleDailyNotification({
     required int id,
     required String title,
@@ -86,32 +85,27 @@ class NotificationService {
     String? payload,
   }) async {
     
-    // Konfigurasi Tampilan Notifikasi
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'medicare_alarm_channel',   // ID Channel (Harus Unik & Tetap)
-      'Alarm Obat Medicare',      // Nama Channel (Muncul di Settings HP)
+      'medicare_alarm_channel',
+      'Alarm Obat Medicare',
       channelDescription: 'Alarm full screen untuk jadwal obat',
       importance: Importance.max,
       priority: Priority.high,
-      fullScreenIntent: true,     // PENTING: Muncul di Lock Screen
+      fullScreenIntent: true,
       playSound: true,
       enableVibration: true,
       category: AndroidNotificationCategory.alarm,
       ticker: 'Waktunya minum obat',
       visibility: NotificationVisibility.public,
-      // Suara custom (jika ada), kalau tidak pakai default
-      // sound: RawResourceAndroidNotificationSound('alarm_sound'), 
     );
 
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
-    // Konfigurasi Waktu (Timezone Aware)
+    // Dapatkan waktu sekarang sesuai Zona Waktu yang sudah di-set (Jakarta)
     final now = tz.TZDateTime.now(tz.local);
     
-    // Buat jadwal hari ini
     var scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
     
-    // Jika jam sudah lewat, jadwalkan besok
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
@@ -125,10 +119,9 @@ class NotificationService {
         body,
         scheduledDate,
         platformDetails,
-        // Mode Presisi Tinggi (Bekerja meski HP Doze/Sleep)
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, 
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Ulangi setiap hari
+        matchDateTimeComponents: DateTimeComponents.time,
         payload: payload,
       );
       debugPrint("✅ Sukses Menjadwalkan ID:$id");
@@ -137,13 +130,11 @@ class NotificationService {
     }
   }
 
-  // --- 3. BATALKAN NOTIFIKASI ---
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
     debugPrint("🗑️ Alarm ID:$id dibatalkan");
   }
 
-  // --- 4. HAPUS SEMUA (Untuk Logout) ---
   Future<void> cancelAllNotifications() async {
     await flutterLocalNotificationsPlugin.cancelAll();
   }

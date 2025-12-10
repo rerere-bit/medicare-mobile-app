@@ -2,47 +2,97 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Model sederhana untuk Connection
+class ConnectionModel {
+  final String id;
+  final String familyId;
+  final String familyName; // Nama Keluarga
+  final String familyEmail;
+  final String patientId;
+  final String patientName; // Nama Pasien
+  final String patientEmail;
+  final String status; // 'pending', 'active', 'rejected'
+
+  ConnectionModel({
+    required this.id,
+    required this.familyId,
+    required this.familyName,
+    required this.familyEmail,
+    required this.patientId,
+    required this.patientName,
+    required this.patientEmail,
+    required this.status,
+  });
+
+  factory ConnectionModel.fromMap(Map<String, dynamic> map, String id) {
+    return ConnectionModel(
+      id: id,
+      familyId: map['familyId'] ?? '',
+      familyName: map['familyName'] ?? '',
+      familyEmail: map['familyEmail'] ?? '',
+      patientId: map['patientId'] ?? '',
+      patientName: map['patientName'] ?? '',
+      patientEmail: map['patientEmail'] ?? '',
+      status: map['status'] ?? 'pending',
+    );
+  }
+}
+
 class FamilyProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  CollectionReference get _connCollection => _firestore.collection('connections');
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // 1. Cari Pasien via Email & Tambahkan ke List Pemantauan
-  Future<void> addPatientByEmail(String email) async {
+  // --- SISI KELUARGA: KIRIM REQUEST ---
+  Future<void> sendConnectionRequest(String patientEmail) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final currentUser = _auth.currentUser;
-      if (currentUser == null) return;
+      final user = _auth.currentUser;
+      if (user == null) throw Exception("User tidak login");
 
-      // A. Cari User berdasarkan Email di collection 'users'
-      final querySnapshot = await _firestore
+      // 1. Cari data diri (Keluarga)
+      final familyDoc = await _firestore.collection('users').doc(user.uid).get();
+      final familyData = familyDoc.data()!;
+
+      // 2. Cari data Pasien berdasarkan Email
+      final patientQuery = await _firestore
           .collection('users')
-          .where('email', isEqualTo: email)
-          .where('role', isEqualTo: 'Pasien') // Pastikan dia Pasien
+          .where('email', isEqualTo: patientEmail)
+          .where('role', isEqualTo: 'Pasien')
           .get();
 
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception("Email pasien tidak ditemukan atau bukan akun Pasien.");
+      if (patientQuery.docs.isEmpty) {
+        throw Exception("Email pasien tidak ditemukan.");
       }
 
-      final patientData = querySnapshot.docs.first.data();
-      final patientId = querySnapshot.docs.first.id;
+      final patientDoc = patientQuery.docs.first;
+      
+      // 3. Cek apakah sudah ada request sebelumnya
+      final existingCheck = await _connCollection
+          .where('familyId', isEqualTo: user.uid)
+          .where('patientId', isEqualTo: patientDoc.id)
+          .get();
 
-      // B. Simpan ke Sub-collection 'monitored_patients' di akun Keluarga
-      await _firestore
-          .collection('users')
-          .doc(currentUser.uid)
-          .collection('monitored_patients')
-          .doc(patientId) // Gunakan ID Pasien sebagai ID Dokumen agar tidak duplikat
-          .set({
-        'uid': patientId,
-        'displayName': patientData['displayName'],
-        'email': patientData['email'],
-        'addedAt': DateTime.now().toIso8601String(),
+      if (existingCheck.docs.isNotEmpty) {
+        throw Exception("Anda sudah mengirim permintaan ke pasien ini.");
+      }
+
+      // 4. Buat Dokumen Connection (Status: Pending)
+      await _connCollection.add({
+        'familyId': user.uid,
+        'familyName': familyData['displayName'] ?? 'Keluarga',
+        'familyEmail': user.email,
+        'patientId': patientDoc.id,
+        'patientName': patientDoc['displayName'] ?? 'Pasien',
+        'patientEmail': patientDoc['email'],
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
     } catch (e) {
@@ -53,16 +103,45 @@ class FamilyProvider extends ChangeNotifier {
     }
   }
 
-  // 2. Ambil Daftar Pasien yang Dipantau
-  Stream<QuerySnapshot> getMonitoredPatients() {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return const Stream.empty();
+  // --- SISI KELUARGA: AMBIL LIST PASIEN ---
+  Stream<List<ConnectionModel>> getMyPatients() {
+    final user = _auth.currentUser;
+    if (user == null) return const Stream.empty();
 
-    return _firestore
-        .collection('users')
-        .doc(currentUser.uid)
-        .collection('monitored_patients')
-        .orderBy('addedAt', descending: true)
-        .snapshots();
+    // Ambil yang statusnya 'active' saja untuk Home Screen
+    return _connCollection
+        .where('familyId', isEqualTo: user.uid)
+        //.where('status', isEqualTo: 'active') // Bisa difilter di UI jika ingin lihat pending juga
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => ConnectionModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+            .toList());
+  }
+
+  // --- SISI PASIEN: AMBIL REQUEST MASUK ---
+  Stream<List<ConnectionModel>> getIncomingRequests() {
+    final user = _auth.currentUser;
+    if (user == null) return const Stream.empty();
+
+    return _connCollection
+        .where('patientId', isEqualTo: user.uid)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => ConnectionModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+            .toList());
+  }
+
+  // --- SISI PASIEN: TERIMA / TOLAK ---
+  Future<void> respondToRequest(String connectionId, bool accept) async {
+    if (accept) {
+      await _connCollection.doc(connectionId).update({'status': 'active'});
+    } else {
+      await _connCollection.doc(connectionId).delete(); // Hapus jika tolak
+    }
+  }
+  
+  // --- SISI PASIEN: HAPUS KELUARGA (UNLINK) ---
+  Future<void> removeCaregiver(String connectionId) async {
+     await _connCollection.doc(connectionId).delete();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import Auth
 import 'package:intl/date_symbol_data_local.dart';
 import 'firebase_options.dart';
 
@@ -12,7 +13,8 @@ import 'screens/home/family_home_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/medication/medication_list_screen.dart';
 import 'screens/schedule/schedule_screen.dart';
-import 'screens/schedule/alarm_screen.dart'; // Import Alarm Screen
+import 'screens/schedule/alarm_screen.dart';
+//import 'screens/home/patient_caregiver_screen.dart'; // Import Caregiver Screen
 
 // Services & Providers
 import 'services/notification_service.dart';
@@ -22,9 +24,13 @@ import 'providers/family_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('id_ID', null);
+  
+  // Init Notifikasi
   await NotificationService().init();
+  
   runApp(const MyApp());
 }
 
@@ -39,32 +45,18 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FamilyProvider()),
       ],
       child: MaterialApp(
-        // --- 1. SET NAVIGATOR KEY (PENTING UNTUK NOTIFIKASI) ---
-        navigatorKey: navigatorKey,
-        
+        navigatorKey: navigatorKey, // Global Key dari NotificationService
         debugShowCheckedModeBanner: false,
         title: 'Medicare',
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF059669)), // Emerald Base
           useMaterial3: true,
+          fontFamily: 'Roboto', // Opsional: Font default
         ),
         
-        // --- 2. LOGIKA AUTH PERSISTENCE (Langsung Home jika sudah login) ---
-        home: StreamBuilder(
-          stream: AuthService().authStateChanges,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.active) {
-              if (snapshot.hasData) {
-                return const HomeScreen(); // Sudah Login
-              } else {
-                return const LoginScreen(); // Belum Login
-              }
-            }
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          },
-        ),
+        // --- AUTH GATE: Pintu Masuk dengan Logic Sync ---
+        home: const AuthGate(), 
         
-        // --- 3. ROUTES ---
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
@@ -75,7 +67,7 @@ class MyApp extends StatelessWidget {
           '/medication_list': (context) => const MedicationListScreen(),
         },
         
-        // --- 4. ON GENERATE ROUTE (Untuk menangani arguments payload) ---
+        // Handling Navigasi Alarm (Payload)
         onGenerateRoute: (settings) {
           if (settings.name == '/alarm') {
             final payload = settings.arguments as String?;
@@ -86,6 +78,53 @@ class MyApp extends StatelessWidget {
           return null;
         },
       ),
+    );
+  }
+}
+
+// --- WIDGET BARU: AUTH GATE (Menangani Sync & Auth State) ---
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _isSyncing = false; // Flag agar tidak sync berulang-ulang saat rebuild
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: AuthService().authStateChanges,
+      builder: (context, snapshot) {
+        // 1. Kondisi Loading Auth
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        // 2. Kondisi Sudah Login
+        if (snapshot.hasData && snapshot.data != null) {
+          final user = snapshot.data!;
+          
+          // --- LOGIC SYNC ALARM ---
+          // Jalankan sync hanya sekali saat user terdeteksi login
+          if (!_isSyncing) {
+            _isSyncing = true;
+            // Gunakan postFrameCallback agar aman dipanggil saat build
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Provider.of<MedicationProvider>(context, listen: false).rescheduleAllAlarms();
+            });
+          }
+          // ------------------------
+
+          return const HomeScreen(); // Lanjut ke penentuan Role (Pasien/Keluarga)
+        }
+
+        // 3. Kondisi Belum Login
+        _isSyncing = false; // Reset flag jika logout
+        return const LoginScreen();
+      },
     );
   }
 }

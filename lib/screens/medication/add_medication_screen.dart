@@ -8,8 +8,13 @@ import 'package:medicare_mobile/services/drug_service.dart';
 
 class AddMedicationScreen extends StatefulWidget {
   final MedicationModel? medication;
+  final String? targetUserId; // PARAM BARU: ID Pasien (Optional)
 
-  const AddMedicationScreen({super.key, this.medication});
+  const AddMedicationScreen({
+    super.key,
+    this.medication,
+    this.targetUserId, // Constructor
+  });
 
   @override
   State<AddMedicationScreen> createState() => _AddMedicationScreenState();
@@ -56,6 +61,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   int _selectedColor = 0xFF2196F3;
 
   bool get isEditMode => widget.medication != null;
+  bool _isForever = false; // Status Seumur Hidup
 
   @override
   void initState() {
@@ -85,7 +91,16 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         }
       }
       
-      _durationController.text = med.duration;
+      // LOGIC LOAD DURASI
+      if (widget.medication!.duration == 'Seumur Hidup') {
+        _isForever = true;
+        _durationController.text = ''; // Kosongkan controller
+      } else {
+        _isForever = false;
+        // Ambil angkanya saja untuk ditampilkan di field
+        _durationController.text = widget.medication!.duration.replaceAll(' Hari', '');
+      }
+
       _notesController.text = med.notes;
       _stockController.text = med.stock.toString();
       _selectedColor = med.color;
@@ -153,20 +168,27 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   void _saveMedication() async {
     if (_selectedDrugName.isEmpty || _dosageController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Nama obat dan dosis wajib diisi!")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nama obat dan dosis wajib diisi!")));
       return;
     }
 
     try {
       final provider = Provider.of<MedicationProvider>(context, listen: false);
       int stockVal = int.tryParse(_stockController.text) ?? 0;
+      List<String> timeStrings = _scheduleTimes.map((t) => "${t.hour}:${t.minute}").toList();
 
-      // Konversi List<TimeOfDay> ke List<String> ("HH:mm") untuk disimpan
-      List<String> timeStrings = _scheduleTimes.map((t) {
-        return "${t.hour}:${t.minute}";
-      }).toList();
+      // LOGIC SIMPAN DURASI
+      String finalDuration;
+      if (_isForever) {
+        finalDuration = "Seumur Hidup";
+      } else {
+        // Validasi input manual
+        if (_durationController.text.isEmpty) {
+           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Isi durasi atau pilih Obat Rutin")));
+           return;
+        }
+        finalDuration = "${_durationController.text} Hari";
+      }
 
       if (isEditMode) {
         await provider.updateMedication(
@@ -174,39 +196,41 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           name: _selectedDrugName,
           dosage: _dosageController.text,
           frequency: _selectedFrequency, 
-          duration: _durationController.text,
+          duration: finalDuration,
           notes: _notesController.text,
           color: _selectedColor,
           type: _selectedType,
           stock: stockVal,
           instruction: _selectedInstruction,
-          timeSlots: timeStrings, // KIRIM DATA WAKTU
+          timeSlots: timeStrings,
+          targetUserId: widget.targetUserId, // PASS ID PASIEN
         );
       } else {
         await provider.addMedication(
           name: _selectedDrugName,
           dosage: _dosageController.text,
           frequency: _selectedFrequency, 
-          duration: _durationController.text,
+          duration: finalDuration,
           notes: _notesController.text,
           color: _selectedColor,
           type: _selectedType,
           stock: stockVal,
           instruction: _selectedInstruction,
-          timeSlots: timeStrings, // KIRIM DATA WAKTU
+          timeSlots: timeStrings,
+          targetUserId: widget.targetUserId, // PASS ID PASIEN
         );
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isEditMode ? "Data diperbarui!" : "Obat berhasil disimpan!")),
-        );
+        // Pesan Sukses Custom
+        String msg = isEditMode ? "Data diperbarui!" : "Obat berhasil ditambahkan!";
+        if (widget.targetUserId != null) msg += " (Sinkronisasi ke Pasien)";
+        
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e")));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal: $e")));
     }
   }
 
@@ -214,11 +238,15 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   Widget build(BuildContext context) {
     final isLoading = context.watch<MedicationProvider>().isLoading;
     final hintStyle = TextStyle(color: Colors.grey[400], fontSize: 14);
+    
+    // Judul Dinamis
+    String title = isEditMode ? "Edit Obat" : "Tambah Obat";
+    if (widget.targetUserId != null) title += " Pasien"; // Indikator Mode Keluarga
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(isEditMode ? "Edit Obat" : "Tambah Obat Baru", style: const TextStyle(color: Colors.black)),
+        title: Text(title, style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 0,
@@ -451,7 +479,66 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             const SizedBox(height: 20),
 
             // 6. DURASI & CATATAN
-            CustomTextField(label: "Durasi Pengobatan", hint: "Contoh: 7 hari / Selamanya", controller: _durationController),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Durasi Pengobatan", style: TextStyle(fontWeight: FontWeight.w600)),
+                // SWITCH TOGGLE
+                Row(
+                  children: [
+                    Text("Obat Rutin", style: TextStyle(fontSize: 12, color: _isForever ? AppTheme.primaryColor : Colors.grey)),
+                    Switch(
+                      value: _isForever,
+                      activeColor: AppTheme.primaryColor,
+                      onChanged: (val) {
+                        setState(() {
+                          _isForever = val;
+                          if (val) _durationController.clear(); // Bersihkan input jika rutin
+                        });
+                      },
+                    ),
+                  ],
+                )
+              ],
+            ),
+            
+            // INPUT FIELD (Hanya muncul jika BUKAN seumur hidup)
+            if (!_isForever)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextField(
+                  controller: _durationController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: "Contoh: 7",
+                    suffixText: "Hari",
+                    fillColor: const Color(0xFFF9FAFB),
+                    filled: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+              )
+            else
+              // Pesan Informatif jika mode Rutin aktif
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue[100]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.all_inclusive, color: Colors.blue), // Icon Infinity
+                    SizedBox(width: 8),
+                    Expanded(child: Text("Obat akan dijadwalkan terus menerus tanpa batas waktu.", style: TextStyle(color: Colors.blue, fontSize: 12))),
+                  ],
+                ),
+              ),
+            
             const SizedBox(height: 16),
             const Text("Catatan / Deskripsi", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
