@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme_app.dart';
-import '../../widgets/custom_textfield.dart';
-import '../../providers/medication_provider.dart';
-import '../../models/medication_model.dart';
-import '../../services/drug_service.dart';
+import 'package:medicare_mobile/core/theme_app.dart';
+import 'package:medicare_mobile/widgets/custom_textfield.dart';
+import 'package:medicare_mobile/providers/medication_provider.dart';
+import 'package:medicare_mobile/models/medication_model.dart';
+// Import Service API
+import 'package:medicare_mobile/services/drug_service.dart';
 
 class AddMedicationScreen extends StatefulWidget {
   final MedicationModel? medication;
@@ -16,14 +17,14 @@ class AddMedicationScreen extends StatefulWidget {
 }
 
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
-  // Controller untuk Autocomplete sedikit berbeda
-  // Kita simpan string nama obat di variabel terpisah jika pakai Autocomplete
+  // Variabel untuk Autocomplete
   String _selectedDrugName = "";
   
   final _dosageController = TextEditingController();
   final _durationController = TextEditingController();
   final _notesController = TextEditingController();
 
+  // Inisialisasi Service API
   final DrugService _drugService = DrugService();
 
   final List<String> _frequencyOptions = [
@@ -34,7 +35,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   ];
 
   late String _selectedFrequency; 
-
   bool get isEditMode => widget.medication != null;
 
   @override
@@ -44,7 +44,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
     if (isEditMode) {
       final med = widget.medication!;
-      _selectedDrugName = med.name; // Pre-fill nama
+      _selectedDrugName = med.name; // Load nama obat lama
       _dosageController.text = med.dosage;
       
       if (_frequencyOptions.contains(med.frequency)) {
@@ -65,6 +65,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   }
 
   void _saveMedication() async {
+    // Validasi
     if (_selectedDrugName.isEmpty || _dosageController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Nama obat dan dosis wajib diisi!")),
@@ -124,35 +125,42 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- AUTOCOMPLETE NAMA OBAT (FITUR API) ---
+            // --- FIELD AUTOCOMPLETE (API) ---
             const Text("Nama Obat", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Autocomplete<DrugModel>(
               initialValue: TextEditingValue(text: _selectedDrugName),
               displayStringForOption: (DrugModel option) => option.name,
+              
+              // Logika Pencarian ke API
               optionsBuilder: (TextEditingValue textEditingValue) async {
                 if (textEditingValue.text == '') {
                   return const Iterable<DrugModel>.empty();
                 }
+                // Panggil Service API
                 return await _drugService.searchDrugs(textEditingValue.text);
               },
+              
+              // Saat User Memilih Salah Satu Opsi
               onSelected: (DrugModel selection) {
                 setState(() {
                   _selectedDrugName = selection.name;
-                  // Auto-fill deskripsi jika notes masih kosong
+                  // Auto-fill deskripsi jika masih kosong
                   if (_notesController.text.isEmpty) {
                     _notesController.text = selection.description;
                   }
                 });
               },
-              // Kustomisasi Tampilan Input agar mirip CustomTextField
+              
+              // Kustomisasi Tampilan Input Field
               fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-                // Sinkronisasi controller internal Autocomplete dengan variabel kita
-                if (textController.text != _selectedDrugName) {
-                    // Hanya set jika berbeda untuk menghindari infinite loop
-                     textController.text = _selectedDrugName;
+                // Pastikan teks sinkron saat edit mode
+                if (textController.text != _selectedDrugName && _selectedDrugName.isNotEmpty) {
+                    // Cek agar cursor tidak lompat-lompat
+                    if(textController.text.isEmpty) textController.text = _selectedDrugName;
                 }
-                // Listener manual untuk menyimpan perubahan jika user mengetik manual (bukan pilih opsi)
+                
+                // Listener untuk input manual (jika obat tidak ada di API)
                 textController.addListener(() {
                   _selectedDrugName = textController.text;
                 });
@@ -161,7 +169,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   controller: textController,
                   focusNode: focusNode,
                   decoration: InputDecoration(
-                    hintText: "Cari nama obat...",
+                    hintText: "Cari nama obat (contoh: Pana...)",
                     fillColor: const Color(0xFFF9FAFB),
                     filled: true,
                     prefixIcon: const Icon(Icons.search),
@@ -169,6 +177,15 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
+                    suffixIcon: _selectedDrugName.isNotEmpty 
+                      ? IconButton(
+                          icon: const Icon(Icons.clear), 
+                          onPressed: (){
+                             textController.clear();
+                             setState(() => _selectedDrugName = "");
+                          }
+                        ) 
+                      : null,
                   ),
                 );
               },
@@ -178,6 +195,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             CustomTextField(label: "Dosis", hint: "500mg", controller: _dosageController),
             const SizedBox(height: 16),
             
+            // --- DROPDOWN FREKUENSI ---
             const Text("Frekuensi", style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Container(
@@ -215,7 +233,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               controller: _notesController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: "Otomatis terisi jika obat ditemukan...",
+                hintText: "Otomatis terisi jika obat ditemukan di database...",
                 fillColor: const Color(0xFFF9FAFB),
                 filled: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),

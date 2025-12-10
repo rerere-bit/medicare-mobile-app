@@ -1,12 +1,12 @@
-import 'dart:async'; // Tambahan untuk Timer refresh UI
 import 'package:flutter/material.dart';
 import '../../core/theme_app.dart';
 import '../../widgets/home_menu_card.dart';
+// Import Widget Countdown Baru
+import '../../widgets/home_countdown_section.dart';
 
 import '../medication/medication_list_screen.dart';
 import '../schedule/schedule_screen.dart';
 import '../history/history_screen.dart';
-// Import Profile Screen agar bisa dinavigasikan
 import '../profile/profile_screen.dart';
 
 class PatientHomeScreen extends StatelessWidget {
@@ -19,7 +19,7 @@ class PatientHomeScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. HEADER DENGAN LOGIC COUNTDOWN
+            // 1. HEADER 
             Container(
               padding: const EdgeInsets.only(
                 top: 60,
@@ -84,7 +84,7 @@ class PatientHomeScreen extends StatelessWidget {
                             ),
                           ),
                           const Text(
-                            "Halo, Sehat Selalu!", // Bisa diganti dinamis nanti
+                            "Halo, Sehat Selalu!",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -125,60 +125,9 @@ class PatientHomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Card Pengingat Berikutnya (Floating Effect)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.medication,
-                            color: AppTheme.primaryColor,
-                            size: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Pengingat Berikutnya",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                "Cek Jadwal", // Placeholder text
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // --- WIDGET PENGINGAT DINAMIS (UPDATED) ---
+                  const HomeCountdownSection(),
+                  // ------------------------------------------
                 ],
               ),
             ),
