@@ -213,6 +213,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   @override
   Widget build(BuildContext context) {
     final isLoading = context.watch<MedicationProvider>().isLoading;
+    final hintStyle = TextStyle(color: Colors.grey[400], fontSize: 14);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -257,6 +258,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                   focusNode: focusNode,
                   decoration: InputDecoration(
                     hintText: "Cari nama obat...",
+                    hintStyle: hintStyle,
                     fillColor: const Color(0xFFF9FAFB),
                     filled: true,
                     prefixIcon: const Icon(Icons.search),
@@ -286,7 +288,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           hintText: "Jml Butir/Botol",
-                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                          hintStyle: hintStyle,
                           fillColor: const Color(0xFFF9FAFB),
                           filled: true,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -458,6 +460,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
               maxLines: 3,
               decoration: InputDecoration(
                 hintText: "Catatan dari dokter...",
+                hintStyle: hintStyle,
                 fillColor: const Color(0xFFF9FAFB),
                 filled: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),

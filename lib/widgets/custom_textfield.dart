@@ -51,8 +51,11 @@ class _CustomTextFieldState extends State<CustomTextField> {
           autovalidateMode: AutovalidateMode.onUserInteraction, // Validasi live
           decoration: InputDecoration(
             hintText: widget.hint,
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+            fillColor: const Color(0xFFF9FAFB),
+            filled: true,
             prefixIcon: widget.icon != null ? Icon(widget.icon, color: Colors.grey) : null,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             // Tombol Mata (Show/Hide)
             suffixIcon: widget.isPassword
                 ? IconButton(
