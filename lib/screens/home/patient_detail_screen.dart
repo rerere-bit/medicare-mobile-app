@@ -340,24 +340,43 @@ class _MedicationListTab extends StatelessWidget {
 }
 
 // ============================================================================
-// TAB 2: ANALITIK (KEPATUHAN & PERINGATAN)
+// TAB 2: ANALITIK (FIXED LOGIC CREATED DATE)
 // ============================================================================
 class _AnalyticsTab extends StatelessWidget {
   final String patientId;
   const _AnalyticsTab({required this.patientId});
 
-  // Helper Logic (Sama seperti sebelumnya)
+  // Helper: Model Data untuk Laporan Lupa
   Map<String, dynamic> _calculateStats(List<MedicationModel> meds, List<HistoryModel> history) {
     int totalSchedule = 0;
     int totalTaken = 0;
     int totalMissed = 0;
     List<Map<String, String>> missedLogList = [];
 
+    // Analisis 7 Hari Terakhir
     final now = DateTime.now();
+    
+    // Normalisasi 'Hari Ini' (Jam 00:00:00) agar perbandingan tanggal akurat
+    final todayStart = DateTime(now.year, now.month, now.day);
+
     for (int i = 0; i < 7; i++) {
+      // Mundur i hari ke belakang
       final dateToCheck = now.subtract(Duration(days: i));
+      final dateToCheckNormal = DateTime(dateToCheck.year, dateToCheck.month, dateToCheck.day);
       
       for (var med in meds) {
+        // --- LOGIC BARU: CEK TANGGAL PEMBUATAN OBAT ---
+        // Normalisasi tanggal pembuatan obat (Jam 00:00:00)
+        final medCreatedNormal = DateTime(med.createdAt.year, med.createdAt.month, med.createdAt.day);
+
+        // Jika tanggal yang dicek (misal kemarin) LEBIH DULU dari tanggal obat dibuat (hari ini)
+        // Maka SKIP (Jangan hitung statistik obat ini untuk hari kemarin)
+        if (dateToCheckNormal.isBefore(medCreatedNormal)) {
+          continue; 
+        }
+        // ----------------------------------------------
+
+        // 1. Tentukan Jadwal per hari
         List<TimeOfDay> dailySchedules = [];
         if (med.timeSlots.isNotEmpty) {
           dailySchedules = med.timeSlots.map((s) {
@@ -370,13 +389,16 @@ class _AnalyticsTab extends StatelessWidget {
            else dailySchedules = [const TimeOfDay(hour: 8, minute: 0)]; 
         }
 
+        // 2. Cek Realisasi Jadwal
         for (var time in dailySchedules) {
           final scheduleTime = DateTime(dateToCheck.year, dateToCheck.month, dateToCheck.day, time.hour, time.minute);
           
+          // Jangan hitung jadwal masa depan (jika cek hari ini tapi jam nanti malam)
           if (scheduleTime.isAfter(now)) continue;
 
           totalSchedule++;
 
+          // Cek apakah ada log yang cocok
           int logsToday = history.where((h) => 
             h.medicationId == med.id && 
             h.takenAt.year == dateToCheck.year && 
@@ -384,6 +406,7 @@ class _AnalyticsTab extends StatelessWidget {
             h.takenAt.day == dateToCheck.day
           ).length;
 
+          // Asumsi sederhana: Urutan jadwal ke-n dicocokkan dengan jumlah minum ke-n
           int scheduleIndex = dailySchedules.indexOf(time) + 1;
           
           if (logsToday >= scheduleIndex) {
@@ -401,7 +424,7 @@ class _AnalyticsTab extends StatelessWidget {
       }
     }
 
-    double adherenceRate = totalSchedule == 0 ? 0 : (totalTaken / totalSchedule) * 100;
+    double adherenceRate = totalSchedule == 0 ? 100 : (totalTaken / totalSchedule) * 100; // Default 100% jika belum ada jadwal
 
     return {
       'rate': adherenceRate,
@@ -426,6 +449,8 @@ class _AnalyticsTab extends StatelessWidget {
             
             final meds = snapMeds.data ?? [];
             final history = snapHistory.data ?? [];
+            
+            // Panggil fungsi kalkulasi yang sudah diperbaiki
             final stats = _calculateStats(meds, history);
 
             final double rate = stats['rate'];
@@ -437,7 +462,7 @@ class _AnalyticsTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. DASHBOARD CARD
+                  // 1. DASHBOARD CARD (Grafik Kepatuhan)
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -449,7 +474,6 @@ class _AnalyticsTab extends StatelessWidget {
                       children: [
                         const Text("Kepatuhan 7 Hari Terakhir", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 20),
-                        // Circular Chart
                         Stack(
                           alignment: Alignment.center,
                           children: [
@@ -461,7 +485,7 @@ class _AnalyticsTab extends StatelessWidget {
                                 strokeWidth: 12,
                                 backgroundColor: Colors.grey[100],
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  rate > 80 ? const Color(0xFF059669) : (rate > 50 ? Colors.orange : Colors.red)
+                                  rate >= 80 ? const Color(0xFF059669) : (rate >= 50 ? Colors.orange : Colors.red)
                                 ),
                               ),
                             ),
