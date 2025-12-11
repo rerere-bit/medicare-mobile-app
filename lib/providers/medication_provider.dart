@@ -329,37 +329,64 @@ class MedicationProvider extends ChangeNotifier {
     }
   }
 
-  // --- LOGIC BARU: CEK DURASI / KADALUARSA PENGOBATAN ---
-  // Helper untuk parsing "7 hari" -> 7
+  // --- LOGIC BARU: CEK VALIDITAS TANGGAL (FIXED) ---
+  
+  // Helper parsing (Sama)
   int _parseDurationDays(String durationStr) {
-    // 1. Cek Flag Khusus
     if (durationStr == 'Seumur Hidup' || durationStr.toLowerCase().contains('rutin')) {
-      return 365 * 50; // Anggap 50 tahun (Unlimited praktis)
+      return 365 * 50; 
     }
-
-    // 2. Logic Lama (Parsing Angka)
     final numericString = durationStr.replaceAll(RegExp(r'[^0-9]'), '');
-    if (numericString.isEmpty) return 365 * 10; // Default fallback
+    if (numericString.isEmpty) return 365 * 10;
     return int.tryParse(numericString) ?? 365 * 10;
   }
 
-  // Helper untuk cek apakah obat sudah lewat durasi pada tanggal tertentu
-  bool isMedicationExpired(MedicationModel med, DateTime checkDate) {
-    final int days = _parseDurationDays(med.duration);
-    // Batas akhir = Tgl Buat + Durasi Hari
-    final endDate = med.createdAt.add(Duration(days: days));
+  // FUNGSI UTAMA: Cek apakah obat aktif pada tanggal tertentu
+  bool isMedicationActiveOnDate(MedicationModel med, DateTime dateToCheck) {
+    // 1. Normalisasi Tanggal (Buang Jam/Menit agar adil)
+    final check = DateTime(dateToCheck.year, dateToCheck.month, dateToCheck.day);
+    final start = DateTime(med.createdAt.year, med.createdAt.month, med.createdAt.day);
     
-    // Bandingkan tanpa jam (Date only)
-    final checkDateOnly = DateTime(checkDate.year, checkDate.month, checkDate.day);
-    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    // 2. CEK MASA LALU: Jika tanggal cek < tanggal buat, sembunyikan.
+    if (check.isBefore(start)) {
+      return false; 
+    }
 
-    return checkDateOnly.isAfter(endDateOnly);
+    // 3. CEK DURASI:
+    final int days = _parseDurationDays(med.duration);
+    
+    // Hitung tanggal berakhir.
+    // Konsep: Jika mulai tgl 11, durasi 2 hari -> Tgl 11 dan 12.
+    // Start (11) + 2 hari = Tgl 13.
+    // Jadi batasnya adalah < Tgl 13.
+    final end = start.add(Duration(days: days));
+
+    // Jika tanggal cek >= tanggal akhir, berarti sudah expired.
+    // (Gunakan isAtSameMomentAs untuk menangkap hari ke-3 pas di perbatasan)
+    if (check.isAfter(end) || check.isAtSameMomentAs(end)) {
+      return false;
+    }
+
+    return true; // Obat Aktif
   }
 
-  // Fungsi untuk Home Screen: Cek obat yang sudah expired HARI INI untuk dihapus
+  // Helper untuk cek apakah obat sudah lewat durasi pada tanggal tertentu (DIPERTAHANKAN untuk schedule_screen)
+  bool isMedicationExpired(MedicationModel med, DateTime checkDate) {
+    // Logikanya dibalik: obat "expired" di suatu tanggal jika TIDAK aktif.
+    return !isMedicationActiveOnDate(med, checkDate);
+  }
+
+  // Helper lama (bisa dihapus atau diganti memanggil fungsi baru di atas)
   List<MedicationModel> getExpiredMedications(List<MedicationModel> meds) {
     final now = DateTime.now();
-    return meds.where((med) => isMedicationExpired(med, now)).toList();
+    // Kita cari yang TIDAK aktif hari ini, tapi start-nya sudah lewat (bukan obat masa depan)
+    return meds.where((med) {
+      final start = DateTime(med.createdAt.year, med.createdAt.month, med.createdAt.day);
+      final check = DateTime(now.year, now.month, now.day);
+      
+      // Expired artinya: Sudah lewat tanggal start DAN sudah tidak aktif
+      return !isMedicationActiveOnDate(med, now) && (check.isAfter(start) || check.isAtSameMomentAs(start));
+    }).toList();
   }
   
   Stream<List<HistoryModel>> getHistory() {
