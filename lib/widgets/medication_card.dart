@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../core/theme_app.dart';
+
 
 class MedicationCard extends StatelessWidget {
   final String name;

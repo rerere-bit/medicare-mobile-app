@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/medication_provider.dart';
 import '../../models/medication_model.dart';
 import '../../models/history_model.dart';
-import '../../widgets/schedule_card.dart'; // Pastikan widget ini ada
+import '../../widgets/schedule_card.dart'; 
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -130,7 +130,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     scheduleItems.sort((a, b) => (a['dateTime'] as DateTime).compareTo(b['dateTime'] as DateTime));
 
                     if (scheduleItems.isEmpty) {
-                      return Center(child: Text("Tidak ada jadwal obat pada tanggal ini", style: TextStyle(color: Colors.grey[500])));;
+                      return Center(child: Text("Tidak ada jadwal obat pada tanggal ini", style: TextStyle(color: Colors.grey[500])));
                     }
 
                     return ListView.builder(

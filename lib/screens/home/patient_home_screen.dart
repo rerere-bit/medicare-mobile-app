@@ -33,7 +33,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
   }
 
   void _checkExpiredMeds() async {
-    final provider = Provider.of<MedicationProvider>(context, listen: false);
+    //final provider = Provider.of<MedicationProvider>(context, listen: false);
     // Ambil data snapshot sekali saja
     // (Dalam app real, mungkin lebih baik listen stream, tapi ini cukup untuk check on open)
     // Kita gunakan data yang sudah ada di stream atau fetch manual simple

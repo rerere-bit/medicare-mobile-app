@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../core/theme_app.dart';
-import '../../providers/medication_provider.dart';
-import '../../services/notification_service.dart';
+
 
 class AlarmScreen extends StatelessWidget {
   // Kita menerima payload (ID Obat) dari notifikasi

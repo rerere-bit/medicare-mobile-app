@@ -105,7 +105,7 @@ class _AuthGateState extends State<AuthGate> {
 
         // 2. Kondisi Sudah Login
         if (snapshot.hasData && snapshot.data != null) {
-          final user = snapshot.data!;
+          //final user = snapshot.data!;
           
           // --- LOGIC SYNC ALARM ---
           // Jalankan sync hanya sekali saat user terdeteksi login
